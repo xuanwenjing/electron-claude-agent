@@ -1,4 +1,11 @@
-import { WS_URL } from "../shared/constants";
+import {
+  BRIDGE_WS_URL,
+  EXTENSION_ROLE,
+  ToClient,
+  ToExtension,
+  type ToClientMessage,
+  type ToExtensionMessage,
+} from "../../../src/shared/bridgeProtocol";
 import type { WorkflowConfig } from "../workflow";
 import { bindKeepAliveHooks, startKeepAlive, tickActiveKeepAlive } from "./keepAlive";
 import { isExtensionReloading, requestReloadExtension } from "./reloadExtension";
@@ -23,7 +30,7 @@ bindKeepAliveHooks({
   },
 });
 
-function send(msg: Record<string, unknown>): void {
+function send(msg: ToClientMessage): void {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(msg));
   }
@@ -42,7 +49,7 @@ function startHeartbeat(): void {
   stopHeartbeat();
   heartbeatTimer = setInterval(() => {
     if (socket?.readyState === WebSocket.OPEN) {
-      send({ type: "heartbeat", role: "extension", ts: Date.now() });
+      send({ type: ToClient.Heartbeat, role: EXTENSION_ROLE, ts: Date.now() });
     }
   }, 20000);
 }
@@ -62,7 +69,7 @@ export function getBridgeStatus(): {
 } {
   return {
     connected: !!(socket && socket.readyState === WebSocket.OPEN),
-    url: WS_URL,
+    url: BRIDGE_WS_URL,
     queue: getQueueStatus(),
   };
 }
@@ -80,7 +87,7 @@ export function connect(): void {
     return;
   }
   try {
-    socket = new WebSocket(WS_URL);
+    socket = new WebSocket(BRIDGE_WS_URL);
   } catch (err) {
     console.warn("[crawl-ext] ws connect error", err);
     scheduleReconnect();
@@ -88,43 +95,38 @@ export function connect(): void {
   }
 
   socket.addEventListener("open", () => {
-    console.log("[crawl-ext] connected", WS_URL);
-    send({ type: "hello", role: "extension" });
+    console.log("[crawl-ext] connected", BRIDGE_WS_URL);
+    send({ type: ToClient.Hello, role: EXTENSION_ROLE });
     startHeartbeat();
     void tickActiveKeepAlive();
   });
 
   socket.addEventListener("message", (ev) => {
-    let msg: {
-      type?: string;
-      taskId?: string;
-      config?: WorkflowConfig;
-      priority?: number;
-    };
+    let msg: ToExtensionMessage;
     try {
       msg = JSON.parse(String(ev.data));
     } catch {
       return;
     }
 
-    if (msg.type === "ping") {
-      send({ type: "hello", role: "extension" });
+    if (msg.type === ToExtension.Ping) {
+      send({ type: ToClient.Hello, role: EXTENSION_ROLE });
       return;
     }
 
-    if (msg.type === "cancel_task") {
+    if (msg.type === ToExtension.CancelTask) {
       cancelTask(msg.taskId);
       void tickActiveKeepAlive();
       return;
     }
 
-    if (msg.type === "reload_extension") {
+    if (msg.type === ToExtension.ReloadExtension) {
       void requestReloadExtension(msg.taskId || "", send);
       return;
     }
 
-    if (msg.type === "start_task") {
-      enqueueTask(msg.taskId || "", msg.config || {}, msg.priority);
+    if (msg.type === ToExtension.StartTask) {
+      enqueueTask(msg.taskId || "", (msg.config || {}) as WorkflowConfig, msg.priority);
       void tickActiveKeepAlive();
     }
   });

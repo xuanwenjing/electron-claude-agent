@@ -21,27 +21,27 @@ contextBridge.exposeInMainWorld("agentApi", {
     ipcRenderer.invoke("agent:stop"),
   onEvent: (handler: (event: AgentProgressEvent) => void): (() => void) => {
     const listener = (_: Electron.IpcRendererEvent, event: AgentProgressEvent) => handler(event);
-    ipcRenderer.on("agent:event", listener);
-    return () => ipcRenderer.removeListener("agent:event", listener);
+    ipcRenderer.on("agent:event:message", listener);
+    return () => ipcRenderer.removeListener("agent:event:message", listener);
   },
 });
 
 contextBridge.exposeInMainWorld("dbApi", {
   info: (): Promise<
     { ok: true; path: string; count: number } | { ok: false; error: string }
-  > => ipcRenderer.invoke("db:info"),
+  > => ipcRenderer.invoke("db:getInfo"),
   listNotes: (): Promise<
     { ok: true; notes: NoteDto[] } | { ok: false; error: string }
-  > => ipcRenderer.invoke("db:notes:list"),
+  > => ipcRenderer.invoke("notes:list"),
   addNote: (
     content: string,
   ): Promise<{ ok: true; note: NoteDto } | { ok: false; error: string }> =>
-    ipcRenderer.invoke("db:notes:add", content),
+    ipcRenderer.invoke("notes:add", content),
   deleteNote: (id: number): Promise<{ ok: true } | { ok: false; error: string }> =>
-    ipcRenderer.invoke("db:notes:delete", id),
+    ipcRenderer.invoke("notes:delete", id),
   clearNotes: (): Promise<
     { ok: true; deleted: number } | { ok: false; error: string }
-  > => ipcRenderer.invoke("db:notes:clear"),
+  > => ipcRenderer.invoke("notes:clear"),
 });
 
 export type UpdateStatusEvent = {
@@ -60,7 +60,7 @@ export type UpdateStatusEvent = {
 
 contextBridge.exposeInMainWorld("crawlApi", {
   getStatus: (): Promise<{ connected: boolean; port: number }> =>
-    ipcRenderer.invoke("crawl:status"),
+    ipcRenderer.invoke("crawl:getStatus"),
   start: (
     config: unknown,
   ): Promise<{ ok: true; taskId: string } | { ok: false; error: string }> =>
@@ -85,27 +85,27 @@ contextBridge.exposeInMainWorld("crawlApi", {
         }>;
       }
     | { ok: false; error: string }
-  > => ipcRenderer.invoke("db:crawl:list"),
+  > => ipcRenderer.invoke("crawl:listResults"),
   onStatus: (handler: (data: { connected: boolean; port: number }) => void) => {
     const listener = (
       _: Electron.IpcRendererEvent,
       data: { connected: boolean; port: number },
     ) => handler(data);
-    ipcRenderer.on("crawl:status", listener);
-    return () => ipcRenderer.removeListener("crawl:status", listener);
+    ipcRenderer.on("crawl:event:status", listener);
+    return () => ipcRenderer.removeListener("crawl:event:status", listener);
   },
   onProgress: (handler: (data: { taskId: string; message: string }) => void) => {
     const listener = (
       _: Electron.IpcRendererEvent,
       data: { taskId: string; message: string },
     ) => handler(data);
-    ipcRenderer.on("crawl:progress", listener);
-    return () => ipcRenderer.removeListener("crawl:progress", listener);
+    ipcRenderer.on("crawl:event:progress", listener);
+    return () => ipcRenderer.removeListener("crawl:event:progress", listener);
   },
   onResult: (handler: (data: unknown) => void) => {
     const listener = (_: Electron.IpcRendererEvent, data: unknown) => handler(data);
-    ipcRenderer.on("crawl:result", listener);
-    return () => ipcRenderer.removeListener("crawl:result", listener);
+    ipcRenderer.on("crawl:event:result", listener);
+    return () => ipcRenderer.removeListener("crawl:event:result", listener);
   },
 });
 
@@ -135,7 +135,7 @@ contextBridge.exposeInMainWorld("requestApi", {
 
 contextBridge.exposeInMainWorld("updateApi", {
   meta: (): Promise<{ version: string; packaged: boolean }> =>
-    ipcRenderer.invoke("update:meta"),
+    ipcRenderer.invoke("update:getMeta"),
   check: (): Promise<{ ok: true; message: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke("update:check"),
   download: (): Promise<{ ok: true; message: string } | { ok: false; error: string }> =>
@@ -143,7 +143,7 @@ contextBridge.exposeInMainWorld("updateApi", {
   onStatus: (handler: (event: UpdateStatusEvent) => void): (() => void) => {
     const listener = (_: Electron.IpcRendererEvent, event: UpdateStatusEvent) =>
       handler(event);
-    ipcRenderer.on("update:status", listener);
-    return () => ipcRenderer.removeListener("update:status", listener);
+    ipcRenderer.on("update:event:status", listener);
+    return () => ipcRenderer.removeListener("update:event:status", listener);
   },
 });

@@ -10,6 +10,7 @@ import {
   waitForCrawlResult,
   type CrawlWaitOutcome,
 } from "../crawl/bridgeServer";
+import { BRIDGE_WS_URL } from "../../shared/bridgeProtocol";
 import { listCrawlResults } from "../db";
 import { ensureWorkspaceDir } from "../paths";
 
@@ -86,7 +87,7 @@ function parseWorkflowConfig(
 const workflowConfigField = z
   .union([z.record(z.string(), z.any()), z.string()])
   .describe(
-    "WorkflowConfig 对象（推荐）。抓取字段：maxRetry、workflow，可选 platform（ctripEbk | ctripHotel）+ needLogin（navigate 到该平台后校验登录，未登录直接失败）。Agent 侧可选：instruction（如何处理抓取结果）、outputSchema（最终 JSON 形态）；扩展忽略后两字段，会写入 crawl/<时间_短id>/config.json。也可传同等内容的 JSON 字符串。",
+    "WorkflowConfig 对象（推荐）。抓取字段：maxRetry、workflow，可选 platform（ctripEbk | ctripHotel）+ needLogin（navigate 到该平台后校验登录，未登录直接失败）；会写入 crawl/<时间_短id>/config.json。也可传同等内容的 JSON 字符串。",
   );
 
 function previewValue(value: unknown): unknown {
@@ -220,6 +221,7 @@ function persistOutcome(
     taskId: result.taskId,
     ok: result.ok,
     error: result.error ?? null,
+    errorCode: result.errorCode ?? null,
     data,
     progress,
     config: opts?.config,
@@ -265,7 +267,7 @@ const startCrawl = tool(
         {
           ok: false,
           error:
-            "Chrome 扩展未连接。请先加载扩展并确保已连上 ws://127.0.0.1:19283",
+            `Chrome 扩展未连接。请先加载扩展并确保已连上 ${BRIDGE_WS_URL}`,
         },
         true,
       );
@@ -327,9 +329,9 @@ const runCrawl = tool(
   "run_crawl",
   [
     "一次完成 start_crawl + await_crawl。",
-    "结果写入 crawl/<YYYYMMDD-HHmmss_短id>/<文件名>（默认 result.json），同目录写入 config.json（含 instruction/outputSchema 若有）。",
+    "结果写入 crawl/<YYYYMMDD-HHmmss_短id>/<文件名>（默认 result.json），同目录写入 config.json。",
     "工具返回路径、ok/error、progressTail、collected 摘要（不含完整 payload）。",
-    "完成后请 Read 返回的 writePath；若 config 含 instruction+outputSchema，按 Skill workflow-task 处理并输出 JSON。",
+    "完成后请 Read 返回的 writePath。",
     "探测用 writePath=probe.json（自动 slim），定稿 result.json + slim:false。失败勿编造数据。",
   ].join(" "),
   {
@@ -351,7 +353,7 @@ const runCrawl = tool(
         {
           ok: false,
           error:
-            "Chrome 扩展未连接。请先加载扩展并确保已连上 ws://127.0.0.1:19283",
+            `Chrome 扩展未连接。请先加载扩展并确保已连上 ${BRIDGE_WS_URL}`,
         },
         true,
       );

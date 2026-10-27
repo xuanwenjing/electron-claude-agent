@@ -30,6 +30,7 @@ import {
 import { NotLoggedInError, assertLoggedIn, collectHotelInfo } from "./hotelInfo";
 import type { CancelToken } from "./util";
 import { TaskCancelledError, cancellableSleep, resolveMaybeExpr, safeEval } from "./util";
+import { TaskErrorCode } from "../../../src/shared/bridgeProtocol";
 
 /** 对齐 common.ts：默认等待与 wait_before_finish 叠加 */
 async function runDefaultWait(
@@ -60,7 +61,7 @@ export async function runWorkflow(
 
   for (let attempt = 1; attempt <= maxRetry; attempt++) {
     if (token?.cancelled) {
-      return { ok: false, error: "任务已取消", data: null };
+      return { ok: false, error: "任务已取消", errorCode: TaskErrorCode.Cancelled, data: null };
     }
 
     const collector = createCollector();
@@ -210,11 +211,11 @@ export async function runWorkflow(
     } catch (err) {
       if (err instanceof TaskCancelledError || token?.cancelled) {
         emit("任务已取消");
-        return { ok: false, error: "任务已取消", data: null };
+        return { ok: false, error: "任务已取消", errorCode: TaskErrorCode.Cancelled, data: null };
       }
       if (err instanceof NotLoggedInError) {
         emit(err.message);
-        return { ok: false, error: err.message, data: null };
+        return { ok: false, error: err.message, errorCode: TaskErrorCode.NotLoggedIn, data: null };
       }
       lastError = err instanceof Error ? err.message : String(err);
       emit(`失败(${attempt}/${maxRetry}): ${lastError}`);
@@ -230,5 +231,5 @@ export async function runWorkflow(
     }
   }
 
-  return { ok: false, error: lastError || "未知错误", data: null };
+  return { ok: false, error: lastError || "未知错误", errorCode: TaskErrorCode.WorkflowFailed, data: null };
 }

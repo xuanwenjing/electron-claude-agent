@@ -1,13 +1,11 @@
 ---
 name: crawl-analyze
-description: 通过 Chrome 扩展试配/调试 WorkflowConfig（听包、call_api、click）。当用户要求抓取调试、探测接口、改 workflow 步骤，或提到 run_crawl / call_api 且配置不含 instruction+outputSchema 时使用。若用户给出含 instruction 与 outputSchema 的完整配置，改用 workflow-task。禁止扒 JS。
+description: 通过 Chrome 扩展试配/调试 WorkflowConfig（听包、call_api、click）。当用户要求抓取调试、探测接口、改 workflow 步骤，或提到 run_crawl / call_api 时使用。禁止扒 JS。
 ---
 
 # Crawl Analyze（抓取并分析）
 
 用 **`mcp__crawl__run_crawl` + WorkflowConfig** **试配**抓取步骤。细节见 [reference.md](reference.md)。
-
-用户已给出带 **`instruction` + `outputSchema`** 的完整配置 → 改用 Skill **`workflow-task`**（抓取后按格式输出 JSON）。
 
 ## 能力组合
 

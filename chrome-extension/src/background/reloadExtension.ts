@@ -1,9 +1,10 @@
 /**
  * 对齐 wormhole triggerReloadPlugin / common_runtimeReload（精简版）
  */
+import { TaskErrorCode, ToClient, ToExtension, type ToClientMessage } from "../../../src/shared/bridgeProtocol";
 import { clearQueue, getQueueStatus } from "./taskQueue";
 
-export type ReloadSendFn = (msg: Record<string, unknown>) => void;
+export type ReloadSendFn = (msg: ToClientMessage) => void;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -19,10 +20,11 @@ export async function requestReloadExtension(
 ): Promise<void> {
   if (reloading) {
     send({
-      type: "task_result",
+      type: ToClient.TaskResult,
       taskId,
       ok: false,
       error: "插件正在重载中",
+      errorCode: TaskErrorCode.ExtensionReloading,
     });
     return;
   }
@@ -30,7 +32,7 @@ export async function requestReloadExtension(
 
   try {
     send({
-      type: "task_progress",
+      type: ToClient.TaskProgress,
       taskId,
       message: "准备重载插件：取消排队与执行中任务…",
     });
@@ -45,15 +47,15 @@ export async function requestReloadExtension(
     }
 
     send({
-      type: "task_progress",
+      type: ToClient.TaskProgress,
       taskId,
       message: "即将 chrome.runtime.reload()",
     });
     send({
-      type: "task_result",
+      type: ToClient.TaskResult,
       taskId,
       ok: true,
-      data: { action: "reload_extension" },
+      data: { action: ToExtension.ReloadExtension },
       error: null,
     });
 
@@ -71,10 +73,11 @@ export async function requestReloadExtension(
   } catch (err) {
     reloading = false;
     send({
-      type: "task_result",
+      type: ToClient.TaskResult,
       taskId,
       ok: false,
       error: err instanceof Error ? err.message : String(err),
+      errorCode: TaskErrorCode.Unknown,
     });
   }
 }

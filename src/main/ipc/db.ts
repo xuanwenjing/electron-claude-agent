@@ -4,7 +4,7 @@ import { addNote, clearNotes, deleteNote, getNotesDbInfo, listCrawlResults, list
 import { toErrorMessage } from "./errors";
 
 export function registerDbIpc(): void {
-  ipcMain.handle("db:info", () => {
+  ipcMain.handle("db:getInfo", () => {
     try {
       return { ok: true as const, ...getNotesDbInfo() };
     } catch (err) {
@@ -12,7 +12,7 @@ export function registerDbIpc(): void {
     }
   });
 
-  ipcMain.handle("db:notes:list", () => {
+  ipcMain.handle("notes:list", () => {
     try {
       return { ok: true as const, notes: listNotes() };
     } catch (err) {
@@ -20,7 +20,7 @@ export function registerDbIpc(): void {
     }
   });
 
-  ipcMain.handle("db:notes:add", (_event, content: string) => {
+  ipcMain.handle("notes:add", (_event, content: string) => {
     try {
       if (typeof content !== "string") {
         return { ok: false as const, error: "内容必须是字符串" };
@@ -31,7 +31,7 @@ export function registerDbIpc(): void {
     }
   });
 
-  ipcMain.handle("db:notes:delete", (_event, id: number) => {
+  ipcMain.handle("notes:delete", (_event, id: number) => {
     try {
       if (typeof id !== "number" || !Number.isInteger(id)) {
         return { ok: false as const, error: "id 无效" };
@@ -45,7 +45,7 @@ export function registerDbIpc(): void {
     }
   });
 
-  ipcMain.handle("db:notes:clear", () => {
+  ipcMain.handle("notes:clear", () => {
     try {
       return { ok: true as const, deleted: clearNotes() };
     } catch (err) {
@@ -53,7 +53,7 @@ export function registerDbIpc(): void {
     }
   });
 
-  ipcMain.handle("db:crawl:list", () => {
+  ipcMain.handle("crawl:listResults", () => {
     try {
       return { ok: true as const, rows: listCrawlResults(5) };
     } catch (err) {

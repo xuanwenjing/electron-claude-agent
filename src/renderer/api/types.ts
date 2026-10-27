@@ -39,7 +39,11 @@ export type CrawlResultEvent = {
   ok: boolean;
   data?: unknown;
   error?: string | null;
+  /** 见 src/shared/bridgeProtocol TaskErrorCode */
+  errorCode?: string | null;
   saved?: unknown;
+  /** 客户端直接下发的任务：workspace/crawl/<taskId>/result.json 绝对路径 */
+  resultPath?: string | null;
 };
 
 export type LogKind = "log" | "assistant" | "tool" | "result" | "error";

@@ -6,6 +6,7 @@
  * - 超时看门狗
  * - 按 taskId 取消（排队中或执行中）
  */
+import { TaskErrorCode, ToClient, type ToClientMessage } from "../../../src/shared/bridgeProtocol";
 import {
   createCancelToken,
   runWorkflow,
@@ -14,7 +15,7 @@ import {
   type WorkflowResult,
 } from "../workflow";
 
-export type QueueSendFn = (msg: Record<string, unknown>) => void;
+export type QueueSendFn = (msg: ToClientMessage) => void;
 
 interface QueuedTask {
   taskId: string;
@@ -58,15 +59,16 @@ export function enqueueTask(
   priority?: number,
 ): void {
   if (!taskId) {
-    sendFn({ type: "task_result", taskId, ok: false, error: "缺少 taskId" });
+    sendFn({ type: ToClient.TaskResult, taskId, ok: false, error: "缺少 taskId", errorCode: TaskErrorCode.InvalidTask });
     return;
   }
   if (activeTaskId === taskId || queue.some((t) => t.taskId === taskId)) {
     sendFn({
-      type: "task_result",
+      type: ToClient.TaskResult,
       taskId,
       ok: false,
       error: "任务已在队列或执行中",
+      errorCode: TaskErrorCode.InvalidTask,
     });
     return;
   }
@@ -83,7 +85,7 @@ export function enqueueTask(
   else queue.splice(idx, 0, item);
 
   sendFn({
-    type: "task_progress",
+    type: ToClient.TaskProgress,
     taskId,
     message: `已入队（优先级 ${item.priority}），前方等待 ${Math.max(0, queue.indexOf(item))}，执行中 ${runningCount}`,
   });
@@ -105,18 +107,18 @@ export function cancelTask(taskId?: string): void {
   const qi = queue.findIndex((t) => t.taskId === taskId);
   if (qi !== -1) {
     queue.splice(qi, 1);
-    sendFn({ type: "task_result", taskId, ok: false, error: "任务已取消" });
+    sendFn({ type: ToClient.TaskResult, taskId, ok: false, error: "任务已取消", errorCode: TaskErrorCode.Cancelled });
     return;
   }
 
   if (activeTaskId === taskId) {
     activeCancel?.cancel();
     // 结果由 execute 结束时统一回传，避免重复 task_result
-    sendFn({ type: "task_progress", taskId, message: "正在取消当前任务…" });
+    sendFn({ type: ToClient.TaskProgress, taskId, message: "正在取消当前任务…" });
     return;
   }
 
-  sendFn({ type: "task_result", taskId, ok: false, error: "任务不存在或已结束" });
+  sendFn({ type: ToClient.TaskResult, taskId, ok: false, error: "任务不存在或已结束", errorCode: TaskErrorCode.InvalidTask });
 }
 
 /** 断连 / 重连：清空排队并取消当前 */
@@ -127,7 +129,7 @@ export function clearQueue(reason = "连接已断开，任务已取消"): void {
   }
   const pending = queue.splice(0, queue.length);
   for (const t of pending) {
-    sendFn({ type: "task_result", taskId: t.taskId, ok: false, error: reason });
+    sendFn({ type: ToClient.TaskResult, taskId: t.taskId, ok: false, error: reason, errorCode: TaskErrorCode.Cancelled });
   }
   activeCancel?.cancel();
   lastStartTime = 0;
@@ -183,7 +185,7 @@ async function execute(item: QueuedTask): Promise<void> {
   activeCancel = token;
 
   sendFn({
-    type: "task_progress",
+    type: ToClient.TaskProgress,
     taskId,
     message: `开始执行（队列剩余 ${queue.length}）`,
   });
@@ -192,7 +194,7 @@ async function execute(item: QueuedTask): Promise<void> {
   const timeoutPromise = new Promise<WorkflowResult>((resolve) => {
     timeoutTimer = setTimeout(() => {
       token.cancel();
-      resolve({ ok: false, error: "任务执行超时被强制结束", data: null });
+      resolve({ ok: false, error: "任务执行超时被强制结束", errorCode: TaskErrorCode.Timeout, data: null });
     }, TASK_TIMEOUT_MS);
   });
 
@@ -200,7 +202,7 @@ async function execute(item: QueuedTask): Promise<void> {
     const result = await Promise.race([
       runWorkflow(
         config,
-        (message) => sendFn({ type: "task_progress", taskId, message }),
+        (message) => sendFn({ type: ToClient.TaskProgress, taskId, message }),
         token,
       ),
       timeoutPromise,
@@ -208,28 +210,31 @@ async function execute(item: QueuedTask): Promise<void> {
 
     if (token.cancelled && !result.ok) {
       sendFn({
-        type: "task_result",
+        type: ToClient.TaskResult,
         taskId,
         ok: false,
         error: result.error || "任务已取消",
+        errorCode: result.errorCode ?? TaskErrorCode.Cancelled,
         data: result.data,
       });
       return;
     }
 
     sendFn({
-      type: "task_result",
+      type: ToClient.TaskResult,
       taskId,
       ok: result.ok,
       data: result.data,
       error: result.error || null,
+      errorCode: result.ok ? null : (result.errorCode ?? TaskErrorCode.Unknown),
     });
   } catch (err) {
     sendFn({
-      type: "task_result",
+      type: ToClient.TaskResult,
       taskId,
       ok: false,
       error: err instanceof Error ? err.message : String(err),
+      errorCode: TaskErrorCode.Unknown,
     });
   } finally {
     if (timeoutTimer) clearTimeout(timeoutTimer);

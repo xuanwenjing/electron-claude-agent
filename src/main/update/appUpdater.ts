@@ -20,7 +20,7 @@ type GetWindow = () => BrowserWindow | null;
 let configured = false;
 
 function send(getWindow: GetWindow, event: UpdateStatusEvent): void {
-  getWindow()?.webContents.send("update:status", event);
+  getWindow()?.webContents.send("update:event:status", event);
 }
 
 export function setupAutoUpdater(getWindow: GetWindow): void {

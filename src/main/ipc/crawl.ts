@@ -1,13 +1,14 @@
 import { ipcMain } from "electron";
 
+import { BRIDGE_PORT } from "../../shared/bridgeProtocol";
 import {
-  BRIDGE_PORT,
   isExtensionConnected,
   reloadExtension,
   startBridgeServer,
   startCrawlTask,
 } from "../crawl/bridgeServer";
 import { openUrlInChrome } from "../crawl/openBrowser";
+import { writeCrawlResultFile } from "../crawl/resultFile";
 import { saveCrawlResult } from "../db";
 import { flushPendingExtensionReload } from "../update/extensionUpdater";
 import { sendToRenderer } from "../window";
@@ -15,12 +16,19 @@ import { toErrorMessage } from "./errors";
 
 const XHS_HOME = "https://www.xiaohongshu.com";
 
+/** 客户端直接下发（不经 Agent）的任务：taskId → config，结果落盘 workspace/crawl/<taskId>/result.json */
+const directTasks = new Map<string, unknown>();
+
 export function registerCrawlIpc(): void {
-  ipcMain.handle("crawl:status", () => ({
+  ipcMain.handle("crawl:getStatus", () => ({
     connected: isExtensionConnected(),
     port: BRIDGE_PORT,
   }));
-  ipcMain.handle("crawl:start", (_event, config: unknown) => startCrawlTask(config));
+  ipcMain.handle("crawl:start", (_event, config: unknown) => {
+    const res = startCrawlTask(config);
+    if (res.ok) directTasks.set(res.taskId, config);
+    return res;
+  });
   ipcMain.handle("crawl:reloadExtension", () => reloadExtension());
   ipcMain.handle("crawl:openXiaohongshu", async () => {
     try {
@@ -36,11 +44,11 @@ export function registerCrawlIpc(): void {
 export function startCrawlBridge(): void {
   startBridgeServer({
     onStatus: (connected) => {
-      sendToRenderer("crawl:status", { connected, port: BRIDGE_PORT });
+      sendToRenderer("crawl:event:status", { connected, port: BRIDGE_PORT });
       if (connected) flushPendingExtensionReload();
     },
     onProgress: (taskId, message) =>
-      sendToRenderer("crawl:progress", { taskId, message }),
+      sendToRenderer("crawl:event:progress", { taskId, message }),
     onResult: (msg) => {
       const saved = saveCrawlResult({
         taskId: msg.taskId,
@@ -48,11 +56,23 @@ export function startCrawlBridge(): void {
         data: msg.data,
         error: msg.error,
       });
-      sendToRenderer("crawl:result", {
+      let resultPath: string | null = null;
+      if (directTasks.has(msg.taskId)) {
+        const config = directTasks.get(msg.taskId);
+        directTasks.delete(msg.taskId);
+        try {
+          resultPath = writeCrawlResultFile({ ...msg, config });
+        } catch (err) {
+          console.error("[crawl] 写入 result.json 失败", err);
+        }
+      }
+      sendToRenderer("crawl:event:result", {
         taskId: msg.taskId,
         ok: msg.ok,
         error: msg.error,
+        errorCode: msg.errorCode ?? null,
         saved,
+        resultPath,
       });
     },
   });

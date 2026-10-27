@@ -32,20 +32,20 @@ export function registerAgentIpc(): void {
         prompt,
         abortController,
         onEvent: (event) => {
-          sendToRenderer("agent:event", event);
+          sendToRenderer("agent:event:message", event);
         },
       });
       return { ok: true as const, result };
     } catch (err) {
       if (err instanceof AgentStoppedError || abortController.signal.aborted) {
-        sendToRenderer("agent:event", {
+        sendToRenderer("agent:event:message", {
           kind: "log",
           text: "已停止",
         });
         return { ok: false as const, error: "已停止", stopped: true as const };
       }
       const message = toErrorMessage(err);
-      sendToRenderer("agent:event", { kind: "error", text: message });
+      sendToRenderer("agent:event:message", { kind: "error", text: message });
       return { ok: false as const, error: message };
     } finally {
       running = false;
@@ -64,7 +64,7 @@ export function registerAgentIpc(): void {
     }
     killRunningPython();
     agentAbort.abort();
-    sendToRenderer("agent:event", {
+    sendToRenderer("agent:event:message", {
       kind: "log",
       text: "正在停止…",
     });

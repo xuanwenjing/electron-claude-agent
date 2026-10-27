@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { CrawlResultEvent, CrawlResultRow, LogKind, LogLine } from "@/api/types";
+import { BRIDGE_PORT } from "../../shared/bridgeProtocol";
 import { SAMPLE_CRAWL_CONFIG } from "../sampleConfig";
 import { useNotesStore } from "./useNotesStore";
 
@@ -26,7 +27,7 @@ let unsubs: Array<() => void> = [];
 
 export const useCrawlStore = create<CrawlState>((set, get) => ({
   connected: false,
-  port: 19283,
+  port: BRIDGE_PORT,
   configText: JSON.stringify(SAMPLE_CRAWL_CONFIG, null, 2),
   results: [],
   logs: [],
@@ -58,7 +59,7 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
         const msg = raw as CrawlResultEvent;
         get().appendLog(
           msg.ok ? "log" : "error",
-          `[crawl 结果] ${msg.ok ? "已入库" : msg.error || "失败"}`,
+          `[crawl 结果] ${msg.ok ? "已入库" : msg.error || "失败"}${!msg.ok && msg.errorCode ? ` [${msg.errorCode}]` : ""}${msg.resultPath ? `，已保存 ${msg.resultPath}` : ""}`,
         );
         void get().refreshResults();
         void useNotesStore.getState().refresh();

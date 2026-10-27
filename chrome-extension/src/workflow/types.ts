@@ -1,3 +1,5 @@
+import type { TaskErrorCode } from "../../../src/shared/bridgeProtocol";
+
 export type WorkflowStepType =
   | "navigate"
   | "call_api"
@@ -68,16 +70,6 @@ export interface WorkflowConfig {
   platform?: HotelPlatform;
   /** true 时：navigate 到 platform 对应站点后必须已登录，否则任务直接失败（不重试） */
   needLogin?: boolean;
-  /**
-   * Agent 侧字段（扩展忽略）：描述对抓取结果如何处理。
-   * 见 skills/workflow-task。
-   */
-  instruction?: string;
-  /**
-   * Agent 侧字段（扩展忽略）：最终 JSON 输出形态（JSON Schema 或示例对象）。
-   * 见 skills/workflow-task。
-   */
-  outputSchema?: unknown;
 }
 
 export interface CollectedText {
@@ -117,6 +109,8 @@ export interface WorkflowResult {
   ok: boolean;
   data: { collected: Collector["data"]; variables: Collector["variables"] } | null;
   error?: string | null;
+  /** ok=false 时有值 */
+  errorCode?: TaskErrorCode | null;
 }
 
 export interface PageFetchResult {

@@ -171,7 +171,7 @@ export function assertLoggedIn(
   info: HotelInfoResult,
 ): void {
   const { platform, needLogin } = config;
-  if (!needLogin || !platform || detectPlatform(requestedUrl) !== platform) return;
+  if (needLogin === false || !platform || detectPlatform(requestedUrl) !== platform) return;
   if (info?.platform === platform && info.isLogin) return;
   throw new NotLoggedInError(`${PLATFORM_LABELS[platform]}未登录，请先在浏览器中登录后再执行任务`);
 }

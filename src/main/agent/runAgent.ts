@@ -53,7 +53,6 @@ function remapMistakenSkillCrawlPath(
   const normalized = filePath.replace(/\\/g, "/");
   const underSkills =
     normalized.includes("/skills-plugin/") ||
-    normalized.includes("/skills/workflow-task/") ||
     normalized.includes("/skills/crawl-analyze/");
   if (!underSkills) return null;
   const m = normalized.match(/\/crawl\/(.+)$/);

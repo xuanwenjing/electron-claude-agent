@@ -1,7 +1,5 @@
 /** 扩展内共享常量 */
 
-export const WS_URL = "ws://127.0.0.1:19283";
-
 /** 相对扩展根目录（dist），供 chrome.scripting.executeScript */
 export const CONTENT_SCRIPT_FILE = "content/index.js";
 export const PAGE_FETCH_PROXY_FILE = "page/fetchProxy.js";

@@ -1,28 +1,23 @@
 import { WebSocketServer, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 
-export const BRIDGE_PORT = 19283;
-
-export type BridgeOutbound =
-  | { type: "start_task"; taskId: string; config: unknown; priority?: number }
-  | { type: "cancel_task"; taskId?: string }
-  | { type: "reload_extension"; taskId: string }
-  | { type: "ping" };
-
-export type BridgeInbound =
-  | { type: "hello"; role: "extension" }
-  | { type: "heartbeat"; role: "extension"; ts?: number }
-  | { type: "task_progress"; taskId: string; message: string }
-  | { type: "task_result"; taskId: string; ok: boolean; data?: unknown; error?: string | null };
-
-export type CrawlTaskResult = Extract<BridgeInbound, { type: "task_result" }>;
+import {
+  BRIDGE_PORT,
+  BRIDGE_WS_URL,
+  EXTENSION_ROLE,
+  ToClient,
+  ToExtension,
+  type TaskResultMessage,
+  type ToClientMessage,
+  type ToExtensionMessage,
+} from "../../shared/bridgeProtocol";
 
 type ProgressHandler = (taskId: string, message: string) => void;
-type ResultHandler = (msg: CrawlTaskResult) => void;
+type ResultHandler = (msg: TaskResultMessage) => void;
 type StatusHandler = (connected: boolean) => void;
 
 export type CrawlWaitOutcome = {
-  result: CrawlTaskResult;
+  result: TaskResultMessage;
   /** 该任务执行期间的 progress 日志（供 Agent 试配排查） */
   progress: string[];
 };
@@ -63,7 +58,7 @@ function takeProgress(taskId: string): string[] {
   return list;
 }
 
-function settleCrawlResult(msg: CrawlTaskResult): void {
+function settleCrawlResult(msg: TaskResultMessage): void {
   const outcome: CrawlWaitOutcome = {
     result: msg,
     progress: takeProgress(msg.taskId),
@@ -131,7 +126,7 @@ function startPing(): void {
   stopPing();
   pingTimer = setInterval(() => {
     if (extensionSocket && extensionSocket.readyState === extensionSocket.OPEN) {
-      extensionSocket.send(JSON.stringify({ type: "ping" } satisfies BridgeOutbound));
+      extensionSocket.send(JSON.stringify({ type: ToExtension.Ping } satisfies ToExtensionMessage));
     }
   }, 20000);
 }
@@ -160,28 +155,28 @@ export function startBridgeServer(handlers: {
   wss = new WebSocketServer({ host: "127.0.0.1", port: BRIDGE_PORT });
   wss.on("connection", (socket) => {
     socket.on("message", (raw) => {
-      let msg: BridgeInbound;
+      let msg: ToClientMessage;
       try {
-        msg = JSON.parse(String(raw)) as BridgeInbound;
+        msg = JSON.parse(String(raw)) as ToClientMessage;
       } catch {
         return;
       }
 
-      if (msg.type === "hello" && msg.role === "extension") {
+      if (msg.type === ToClient.Hello && msg.role === EXTENSION_ROLE) {
         setExtension(socket);
         return;
       }
-      if (msg.type === "heartbeat" && msg.role === "extension") {
+      if (msg.type === ToClient.Heartbeat && msg.role === EXTENSION_ROLE) {
         // 扩展侧心跳：确认仍是当前扩展连接即可
         if (extensionSocket !== socket) setExtension(socket);
         return;
       }
-      if (msg.type === "task_progress") {
+      if (msg.type === ToClient.TaskProgress) {
         appendProgress(msg.taskId, msg.message);
         onProgress?.(msg.taskId, msg.message);
         return;
       }
-      if (msg.type === "task_result") {
+      if (msg.type === ToClient.TaskResult) {
         settleCrawlResult(msg);
         onResult?.(msg);
       }
@@ -213,11 +208,11 @@ export function startCrawlTask(
   priority?: number,
 ): { ok: true; taskId: string } | { ok: false; error: string } {
   if (!isExtensionConnected()) {
-    return { ok: false, error: "Chrome 扩展未连接，请先加载并打开扩展（会自动连 ws://127.0.0.1:19283）" };
+    return { ok: false, error: `Chrome 扩展未连接，请先加载并打开扩展（会自动连 ${BRIDGE_WS_URL}）` };
   }
   const taskId = randomUUID();
   progressLogs.set(taskId, []);
-  const payload: BridgeOutbound = { type: "start_task", taskId, config, priority };
+  const payload: ToExtensionMessage = { type: ToExtension.StartTask, taskId, config, priority };
   extensionSocket!.send(JSON.stringify(payload));
   return { ok: true, taskId };
 }
@@ -228,7 +223,7 @@ export function reloadExtension(): { ok: true; taskId: string } | { ok: false; e
     return { ok: false, error: "Chrome 扩展未连接" };
   }
   const taskId = randomUUID();
-  const payload: BridgeOutbound = { type: "reload_extension", taskId };
+  const payload: ToExtensionMessage = { type: ToExtension.ReloadExtension, taskId };
   extensionSocket!.send(JSON.stringify(payload));
   return { ok: true, taskId };
 }
@@ -237,7 +232,7 @@ export function cancelCrawlTask(taskId?: string): { ok: true } | { ok: false; er
   if (!isExtensionConnected()) {
     return { ok: false, error: "Chrome 扩展未连接" };
   }
-  const payload: BridgeOutbound = { type: "cancel_task", taskId };
+  const payload: ToExtensionMessage = { type: ToExtension.CancelTask, taskId };
   extensionSocket!.send(JSON.stringify(payload));
   return { ok: true };
 }

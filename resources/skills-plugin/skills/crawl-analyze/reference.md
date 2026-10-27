@@ -8,12 +8,8 @@
   workflow: WorkflowItem[];   // 必填，顺序执行（扩展执行）
   platform?: "ctripEbk" | "ctripHotel"; // 任务所属平台（携程EBK / 携程酒店）
   needLogin?: boolean;        // true：navigate 到 platform 站点后校验登录态，未登录直接失败、不重试
-  instruction?: string;       // Agent 侧：对抓取结果如何处理（扩展忽略）
-  outputSchema?: unknown;     // Agent 侧：最终 JSON 形态 / Schema（扩展忽略）
 }
 ```
-
-若配置含 `instruction` + `outputSchema`，应走 Skill **`workflow-task`**：抓取 → 按 instruction 处理 → 按 outputSchema 输出 JSON。本文件只描述扩展可执行的抓取步骤。
 
 结果形态（`await_crawl` 落盘后的 `data`）：
 
