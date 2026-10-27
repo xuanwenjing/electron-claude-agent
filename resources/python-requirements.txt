@@ -1,0 +1,5 @@
+# 打包进内置 Python 的第三方依赖（pip requirements 格式），由 scripts/fetch-python.js 安装。
+# 跨平台打包（如在 mac 上打 win 包）只能装有预编译 wheel 的包。
+# 例：
+# requests==2.32.3
+# openpyxl==3.1.5

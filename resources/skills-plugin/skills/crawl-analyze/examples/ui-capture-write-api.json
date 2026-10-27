@@ -1,0 +1,33 @@
+{
+  "maxRetry": 1,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://example.com/list",
+      "event": "open_page"
+    },
+    {
+      "type": "click",
+      "selector": "[he-click='reply_edit'], button.reply, .reply-btn",
+      "event": "open_editor",
+      "allow_exception": true
+    },
+    {
+      "type": "input",
+      "selector": "textarea, .ant-input",
+      "value": "感谢您的反馈，我们会继续改进。",
+      "event": "fill_content"
+    },
+    {
+      "type": "click",
+      "selector": "[he-click='reply_submit'], button[type='submit'].ant-btn-primary",
+      "event": "write_api",
+      "need_collect": true,
+      "reg_exp": "setCommentReply|/api/submit",
+      "global_variables": {
+        "name": "writeHit",
+        "url": "setCommentReply"
+      }
+    }
+  ]
+}

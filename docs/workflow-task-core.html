@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>核心抓取任务 · workflow-task</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
+    .kicker {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }
+    h2 { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
+    .lede { color: var(--muted); max-width: 70ch; margin: 0 0 28px; }
+
+    .chain {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 900px) { .chain { grid-template-columns: 1fr 1fr 1fr; } }
+    .chain article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 118px;
+    }
+    .chain .n { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }
+    .chain h3 { margin: 0 0 4px; font-size: 13px; }
+    .chain p { margin: 0; font-size: 12px; color: var(--muted); }
+    .chain article.back { border-color: var(--accent); background: var(--accent-soft); }
+    .chain article.back .n, .chain article.back h3 { color: var(--accent); }
+
+    .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+    @media (max-width: 800px) { .three { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 14px; }
+    .card p { margin: 0; font-size: 13px; color: var(--muted); }
+    .who {
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }
+    .who.ext { background: var(--ok-soft); color: var(--ok); }
+    .who.agent { background: var(--accent-soft); color: var(--accent); }
+
+    pre, code { font-family: var(--mono); }
+    pre {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .steps { display: grid; gap: 8px; }
+    .step {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 12px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      width: 100%;
+    }
+    .step:hover { background: #f7f5ef; }
+    .step.on { border-color: var(--accent); background: var(--accent-soft); }
+    .step.fail { border-color: var(--bad); background: var(--bad-soft); }
+    .idx {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+      padding-top: 2px;
+    }
+    .step.fail .idx { color: var(--bad); }
+    .step h3 { margin: 0 0 2px; font-size: 14px; }
+    .step p { margin: 0; font-size: 13px; color: var(--muted); }
+
+    .split { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 16px; }
+    @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 280px;
+    }
+    .panel h3 { margin: 0 0 10px; font-size: 14px; }
+    .panel .meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+    .kpi { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+    .kpi span { display: block; font-size: 11px; color: var(--muted); }
+    .kpi strong { font-size: 20px; letter-spacing: -0.03em; }
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+    .pill.bad { background: var(--bad-soft); color: var(--bad); }
+    .pill.warn { background: var(--warn-soft); color: var(--warn); }
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+    .note {
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+    }
+    .note strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">workflow-task · 客户端核心闭环</div>
+    <h1>服务端下发 WorkflowConfig，客户端回传 outputSchema 结果</h1>
+    <p class="lede">
+      用户不点运行。后端按账号推送完整配置，本机走固定流程：校验 → Chrome 扩展执行 workflow → Agent 按 instruction 汇总 → 回传对齐 outputSchema 的 JSON。
+      执行日志另传 OSS，地址写在回包的 <code>clientLogOssUrl</code>。下面以「携程 EBK 评论回复」为例。
+    </p>
+
+    <div class="chain">
+      <article>
+        <div class="n">01 后端</div>
+        <h3>下发 WorkflowConfig</h3>
+        <p>workflow + instruction + outputSchema。metrics 键在此时定死。</p>
+      </article>
+      <article>
+        <div class="n">02 校验</div>
+        <h3>三件套齐全才跑</h3>
+        <p>缺字段就停，不臆造格式。</p>
+      </article>
+      <article>
+        <div class="n">03 扩展</div>
+        <h3>只跑 workflow</h3>
+        <p>打开 EBK、听包、点回复。不管怎么汇总。</p>
+      </article>
+      <article>
+        <div class="n">04 Agent</div>
+        <h3>按 instruction 处理</h3>
+        <p>只填 outputSchema.metrics 已有的键。</p>
+      </article>
+      <article>
+        <div class="n">05 定稿</div>
+        <h3>对齐 outputSchema</h3>
+        <p>成功、失败、需要登录都用同一骨架。</p>
+      </article>
+      <article class="back">
+        <div class="n">06 回传</div>
+        <h3>JSON + 日志地址</h3>
+        <p>结果入库做报表；clientLogOssUrl 留给排障。</p>
+      </article>
+    </div>
+
+    <h2>一份配置，三种角色</h2>
+    <div class="three">
+      <div class="card">
+        <span class="who ext">Chrome 扩展</span>
+        <h3>workflow / maxRetry</h3>
+        <p>去哪个页、点哪个按钮、听哪条接口。instruction 不进扩展。</p>
+      </div>
+      <div class="card">
+        <span class="who agent">本机 Agent</span>
+        <h3>instruction</h3>
+        <p>自然语言：回复待回复评论，再按 metrics 模板统计。不加戏、不增字段。</p>
+      </div>
+      <div class="card">
+        <span class="who agent">回传后端</span>
+        <h3>outputSchema</h3>
+        <p>最终 JSON 合同。信封（时间、成败、日志）+ 下发时定死的 metrics。</p>
+      </div>
+    </div>
+
+    <h2>场景：携程 EBK 评论回复</h2>
+    <p class="lede" style="margin-bottom:12px">
+      后端下发完整配置，不是让客户端自己想。metrics 有哪些键，写在下发的 <code>outputSchema.metrics</code> 里；客户端只按样填值。
+    </p>
+    <div class="split">
+      <div class="card">
+        <h3>后端下发的 WorkflowConfig</h3>
+        <pre id="configJson"></pre>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:10px">
+          <h3>成功时回传</h3>
+          <pre id="okJson"></pre>
+        </div>
+        <div class="card">
+          <h3>登录失效时回传（同一骨架）</h3>
+          <p style="margin-bottom:8px">抓取失败不编造业务数字。信封填 <code>LOGIN_REQUIRED</code>，metrics 各键为 0。</p>
+          <pre id="loginJson"></pre>
+        </div>
+      </div>
+    </div>
+
+    <h2>本机执行顺序</h2>
+    <p class="lede" style="margin-bottom:12px">点左侧步骤。右侧可切换「抓取成功」和「需要登录」。</p>
+    <div class="split">
+      <div class="steps" id="steps"></div>
+      <div>
+        <div class="btns">
+          <button type="button" class="btn primary" id="btnOk">路径：抓取成功</button>
+          <button type="button" class="btn" id="btnLogin">路径：需要登录</button>
+        </div>
+        <div class="panel" id="detail"></div>
+      </div>
+    </div>
+
+    <h2>后端收什么</h2>
+    <p class="lede" style="margin-bottom:12px">
+      后端只收对齐 outputSchema 的 JSON。业务报表用信封 + metrics；排障用 <code>clientLogOssUrl</code>。
+      原始抓取数据和 workflow 细节留在客户端，不上报。
+      失败（含需要登录）也要传日志，否则最难查的情况没有现场。
+    </p>
+    <table>
+      <thead>
+        <tr><th>交给后端</th><th>不上报</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>outputSchema 结果（含 metrics、errorCode、时间、日志地址）</td>
+          <td>Chrome 采集到的原始 payload / Cookie / 评论原文</td>
+        </tr>
+        <tr>
+          <td>执行日志（OSS）里的进度与错误摘要</td>
+          <td>商家密码、验证码；WorkflowConfig 全文（后端自己有）</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="lede">OSS 上传失败时：业务 JSON 照交，<code>clientLogOssUrl</code> 为 null，可带 <code>logUploadError</code>。</p>
+
+    <h2>回传字段：公共信封 + 下发时定死的 metrics</h2>
+    <p class="lede" style="margin-bottom:12px">
+      <strong>metrics 的字段名由任务下发时的 outputSchema.metrics 定死。</strong>
+      客户端只填值，不准增删键。后端用自己保存的 schema 解析。
+      信封（时间、成败、日志地址）是客户端协议固定槽，建议写在同一份 outputSchema 模板里。
+    </p>
+    <table>
+      <thead>
+        <tr><th>字段</th><th>含义</th><th>谁定 / 谁填</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>taskId</code></td><td>后端业务任务 ID</td><td>下发时带上，原样带回</td></tr>
+        <tr><td><code>platform</code> / <code>platformLabel</code></td><td>枚举如 ctrip / meituan / douyin；展示名如「携程EBK」</td><td>下发时带上</td></tr>
+        <tr><td><code>taskType</code></td><td>如 review_reply、order_summary</td><td>下发时带上</td></tr>
+        <tr><td><code>ok</code> / <code>needsLogin</code></td><td>是否跑完；是否因登录态失效而停</td><td>客户端填</td></tr>
+        <tr><td><code>errorCode</code> / <code>error</code></td><td>机器可判的失败码；给人看的原因。成功为 null</td><td>客户端填</td></tr>
+        <tr><td><code>startedAt</code> / <code>finishedAt</code> / <code>durationMs</code></td><td>开始、结束、耗时</td><td>客户端填</td></tr>
+        <tr><td><code>clientVersion</code></td><td>客户端版本</td><td>客户端填</td></tr>
+        <tr><td><code>clientLogOssUrl</code></td><td>执行日志 OSS 地址</td><td>客户端填；上传失败为 null</td></tr>
+        <tr><td><code>metrics.*</code></td><td>本任务业务结果</td><td>键由下发 schema 定死；客户端填值，失败则 0 / null / []</td></tr>
+      </tbody>
+    </table>
+
+    <h2>errorCode</h2>
+    <table>
+      <thead>
+        <tr><th>码</th><th>含义</th><th>客户端侧</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>LOGIN_REQUIRED</code></td><td>商家后台未登录或会话过期</td><td>引导去 Chrome 登录；metrics 全 0</td></tr>
+        <tr><td><code>EXTENSION_DISCONNECTED</code></td><td>扩展未连接</td><td>提示打开 Chrome 并加载扩展</td></tr>
+        <tr><td><code>CRAWL_FAILED</code></td><td>workflow 执行失败</td><td>看 OSS 日志，不编数据</td></tr>
+        <tr><td><code>AGENT_FAILED</code></td><td>抓取成功但汇总失败</td><td>看 Agent 日志</td></tr>
+        <tr><td><code>CANCELLED</code></td><td>用户停止或后端取消</td><td>不重试除非再下发</td></tr>
+        <tr><td><code>CONFIG_INVALID</code></td><td>下发配置不完整</td><td>后端修配置</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>约定</strong>
+      扩展只执行 workflow。instruction / outputSchema 只在顶层，不当步骤字段。
+      抓取失败立刻停，不编造 metrics。成功才按 instruction 填下发模板里的键。
+      无论成败，先上传执行日志，再把 clientLogOssUrl 写进回包。日志不含 Cookie 和接口原文。
+    </div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      taskId: "T-10421",
+      platform: "ctrip",
+      platformLabel: "携程EBK",
+      taskType: "review_reply",
+      maxRetry: 1,
+      instruction: "对待回复的携程 EBK 评论按规则回复；按 outputSchema.metrics 统计 repliedCount / goodCount / badCount / skippedCount。缺值填 0。若跳到登录则 needsLogin=true，metrics 全 0，不要增删字段。",
+      outputSchema: {
+        taskId: "T-10421",
+        crawlTaskId: "",
+        platform: "ctrip",
+        platformLabel: "携程EBK",
+        taskType: "review_reply",
+        ok: true,
+        needsLogin: false,
+        errorCode: null,
+        error: null,
+        startedAt: "ISO-8601",
+        finishedAt: "ISO-8601",
+        durationMs: 0,
+        clientVersion: "",
+        clientLogOssUrl: null,
+        logUploadError: null,
+        metrics: {
+          repliedCount: 0,
+          goodCount: 0,
+          badCount: 0,
+          skippedCount: 0
+        }
+      },
+      workflow: [
+        { type: "navigate", url: "https://ebooking.ctrip.com/comment/commentList", event: "comments", need_collect: true, reg_exp: "getComment" },
+        { type: "click", selector: "button.reply", event: "open_editor" },
+        { type: "input", selector: "textarea", value: "{{replyText}}", event: "fill_reply" },
+        { type: "click", selector: "button.submit", event: "submit", need_collect: true, reg_exp: "setCommentReply" }
+      ]
+    };
+
+    const OK = {
+      taskId: "T-10421",
+      crawlTaskId: "a1b2c3d4",
+      platform: "ctrip",
+      platformLabel: "携程EBK",
+      taskType: "review_reply",
+      ok: true,
+      needsLogin: false,
+      errorCode: null,
+      error: null,
+      startedAt: "2026-09-18T14:00:03+08:00",
+      finishedAt: "2026-09-18T14:02:11+08:00",
+      durationMs: 128000,
+      clientVersion: "0.1.3",
+      clientLogOssUrl: "https://oss.example.com/agent-logs/20260918/a1b2c3d4.json",
+      logUploadError: null,
+      metrics: {
+        repliedCount: 12,
+        goodCount: 9,
+        badCount: 3,
+        skippedCount: 4
+      }
+    };
+
+    const NEED_LOGIN = {
+      taskId: "T-10421",
+      crawlTaskId: "a1b2c3d4",
+      platform: "ctrip",
+      platformLabel: "携程EBK",
+      taskType: "review_reply",
+      ok: false,
+      needsLogin: true,
+      errorCode: "LOGIN_REQUIRED",
+      error: "商家后台登录已失效，已停止。未回复任何评论。",
+      startedAt: "2026-09-18T14:00:03+08:00",
+      finishedAt: "2026-09-18T14:00:18+08:00",
+      durationMs: 15000,
+      clientVersion: "0.1.3",
+      clientLogOssUrl: "https://oss.example.com/agent-logs/20260918/a1b2c3d4.json",
+      logUploadError: null,
+      metrics: {
+        repliedCount: 0,
+        goodCount: 0,
+        badCount: 0,
+        skippedCount: 0
+      }
+    };
+
+    document.getElementById("configJson").textContent = JSON.stringify(CONFIG, null, 2);
+    document.getElementById("okJson").textContent = JSON.stringify(OK, null, 2);
+    document.getElementById("loginJson").textContent = JSON.stringify(NEED_LOGIN, null, 2);
+
+    const STEPS = [
+      {
+        title: "校验配置",
+        brief: "workflow、instruction、outputSchema 缺一不可。",
+        ok: "下发的评论回复配置三件套齐全，开始跑。",
+        login: "配置本身齐全。需要登录是抓取阶段才发现的。"
+      },
+      {
+        title: "扩展执行 workflow",
+        brief: "打开评论页、听包、点回复。",
+        ok: "Chrome 已登录 EBK，按步骤回复待回复评论。",
+        login: "打开评论页跳到登录页。立即停止，不汇总、不编造数字。"
+      },
+      {
+        title: "读取采集结果",
+        brief: "仅抓取成功后进行。",
+        ok: "从采集结果看每条评论的评分、是否回复成功。",
+        login: "跳过。没有可靠业务数据。"
+      },
+      {
+        title: "按 instruction 填 metrics",
+        brief: "只填下发模板里已有的键。",
+        ok: "repliedCount=12，goodCount=9，badCount=3，skippedCount=4。",
+        login: "跳过。metrics 全 0，不装成成功。"
+      },
+      {
+        title: "回传结果 + 上传日志",
+        brief: "对齐 outputSchema；日志上 OSS，地址写入回包。",
+        ok: "后端入库后报表展示回复 12 条；排障走 clientLogOssUrl。",
+        login: "回传 LOGIN_REQUIRED，metrics 为 0；日志里能看到跳到登录页。"
+      }
+    ];
+
+    let path = "ok";
+    let current = 0;
+
+    function render() {
+      const box = document.getElementById("steps");
+      box.innerHTML = STEPS.map((s, i) => {
+        const stop = path === "login" && i >= 2;
+        const cls = ["step", i === current ? "on" : "", stop ? "fail" : ""].filter(Boolean).join(" ");
+        return `<button type="button" class="${cls}" data-i="${i}">
+          <div class="idx">0${i + 1}</div>
+          <div><h3>${s.title}</h3><p>${s.brief}</p></div>
+        </button>`;
+      }).join("");
+      box.querySelectorAll(".step").forEach((el) => {
+        el.addEventListener("click", () => { current = Number(el.dataset.i); render(); });
+      });
+
+      const s = STEPS[current];
+      const success = path === "ok";
+      const body = success ? s.ok : s.login;
+      const result = success ? OK : NEED_LOGIN;
+      const showResult = current === 4 || (path === "login" && current >= 1);
+      document.getElementById("detail").innerHTML = `
+        <h3>${s.title}</h3>
+        <div class="meta">${success ? "路径：抓取成功 → 填 metrics → 回传" : "路径：未登录 → 立即停 → 仍回传同一骨架（metrics 为 0）"}</div>
+        <p>${body}</p>
+        ${showResult ? `
+          <div class="kpis">
+            <div class="kpi"><span>平台</span><strong>${result.platformLabel}</strong></div>
+            <div class="kpi"><span>状态</span><strong>${result.ok ? "成功" : "失败"}</strong></div>
+            <div class="kpi"><span>耗时</span><strong>${Math.round(result.durationMs / 1000)}s</strong></div>
+            <div class="kpi"><span>回复 / 好评 / 差评</span><strong>${result.metrics.repliedCount} / ${result.metrics.goodCount} / ${result.metrics.badCount}</strong></div>
+          </div>
+          <span class="pill ${result.ok ? "" : "bad"}">${result.ok ? "已回传，可供报表展示" : "已回传：引导去 Chrome 登录，不展示假数据"}</span>
+        ` : ""}
+      `;
+    }
+
+    document.getElementById("btnOk").addEventListener("click", () => {
+      path = "ok"; current = 0;
+      document.getElementById("btnOk").classList.add("primary");
+      document.getElementById("btnLogin").classList.remove("primary");
+      render();
+    });
+    document.getElementById("btnLogin").addEventListener("click", () => {
+      path = "login"; current = 1;
+      document.getElementById("btnLogin").classList.add("primary");
+      document.getElementById("btnOk").classList.remove("primary");
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

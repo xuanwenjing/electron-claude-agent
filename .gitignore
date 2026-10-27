@@ -1,0 +1,10 @@
+node_modules/
+dist/
+chrome-extension/dist/
+release/
+.env
+*.log
+.DS_Store
+workspace/tmp-*
+workspace/crawl/
+resources/python/

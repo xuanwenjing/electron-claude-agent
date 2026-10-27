@@ -1,0 +1,34 @@
+{
+  "maxRetry": 1,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://ebooking.ctrip.com/comment/commentList",
+      "event": "listcap",
+      "need_collect": true,
+      "reg_exp": "getCommentList",
+      "global_variables": {
+        "name": "listHit",
+        "url": "getCommentList"
+      }
+    },
+    {
+      "type": "call_api",
+      "event": "list_filtered",
+      "need_collect": true,
+      "reg_exp": "getCommentList",
+      "call_api_params": {
+        "url": "https://ebooking.ctrip.com/restapi/soa2/26353/getCommentList",
+        "method": "POST",
+        "headers": {
+          "__ref": "${listHit.headers}",
+          "Content-Type": "application/json"
+        },
+        "payload": {
+          "__ref": "${listHit.payload}",
+          "commentStatus": 1
+        }
+      }
+    }
+  ]
+}

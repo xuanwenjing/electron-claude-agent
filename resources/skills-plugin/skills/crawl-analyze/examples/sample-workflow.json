@@ -1,0 +1,12 @@
+{
+  "maxRetry": 2,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://ebooking.ctrip.com/comment/commentList",
+      "event": "open_example",
+      "need_collect": true,
+      "reg_exp": "/restapi/soa2/26353/getCommentNumV2"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "maxRetry": 2,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://example.com/dashboard",
+      "event": "open_dashboard"
+    },
+    {
+      "type": "click",
+      "selector": "button.load-more, .btn-load-more",
+      "event": "after_load_more",
+      "need_collect": true,
+      "reg_exp": "/api/items",
+      "allow_exception": false
+    }
+  ]
+}

@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>客户端产品设计</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --sidebar: #f7f4ee;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }
+    .kicker {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }
+    h2 { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
+    .lede { color: var(--muted); max-width: 72ch; margin: 0 0 20px; }
+    code { font-family: var(--mono); font-size: 12px; }
+
+    .principles {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 900px) { .principles { grid-template-columns: 1fr 1fr; } }
+    .principles article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .principles h3 { margin: 0 0 4px; font-size: 13px; }
+    .principles p { margin: 0; font-size: 12px; color: var(--muted); }
+
+    .scenes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .app-chrome {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--paper);
+    }
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-2);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .titlebar .left { display: flex; align-items: center; gap: 10px; }
+    .dots { display: flex; gap: 6px; }
+    .dots i { width: 9px; height: 9px; border-radius: 50%; background: #c9c2b4; display: block; }
+    .jobchip {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .jobchip.wait { background: var(--warn-soft); color: var(--warn); }
+    .jobchip.idle { background: var(--bg); color: var(--muted); }
+    .jobchip.bad { background: var(--bad-soft); color: var(--bad); }
+    .app-body { display: flex; min-height: 580px; align-items: stretch; }
+    .nav {
+      width: 200px;
+      flex-shrink: 0;
+      background: var(--sidebar);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      padding: 16px 10px 12px;
+    }
+    .nav .product { padding: 0 8px 14px; }
+    .nav .product small {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .nav .product b { font-size: 15px; }
+    .nav button.item {
+      display: flex;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      font-size: 13px;
+      color: var(--ink);
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .nav button.item[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+    .nav .spacer { flex: 1; }
+    .ext {
+      margin: 8px;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .ext.on { background: var(--ok-soft); color: var(--ok); }
+    .ext.off { background: var(--warn-soft); color: var(--warn); }
+    .stage { flex: 1; min-width: 0; padding: 22px 24px 28px; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .row h1 { font-size: 20px; margin: 0 0 4px; }
+    .row p { margin: 0; color: var(--muted); font-size: 13px; }
+    .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+    .kpi {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .kpi span { display: block; font-size: 11px; color: var(--muted); }
+    .kpi strong { font-size: 18px; letter-spacing: -0.03em; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      background: var(--paper);
+    }
+    .card h3 { margin: 0 0 6px; font-size: 14px; }
+    .card p { margin: 0; font-size: 13px; color: var(--muted); }
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--bg-2);
+      color: var(--muted);
+      margin-right: 6px;
+    }
+    .pill.ok { background: var(--ok-soft); color: var(--ok); }
+    .pill.warn { background: var(--warn-soft); color: var(--warn); }
+    .pill.bad { background: var(--bad-soft); color: var(--bad); }
+    .hint { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+    .banner {
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      display: none;
+    }
+    .banner.show { display: block; }
+    .banner strong { display: block; margin-bottom: 4px; }
+    .banner.warn { border: 1px solid var(--warn); background: var(--warn-soft); }
+    .banner.bad { border: 1px solid var(--bad); background: var(--bad-soft); }
+    .login-box { max-width: 380px; margin: 48px auto; }
+    .login-box h1 { font-size: 22px; }
+    .form-row { margin-bottom: 10px; }
+    .form-row label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .form-row input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      background: var(--paper);
+    }
+    .overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(29, 36, 48, 0.35);
+      align-items: center;
+      justify-content: center;
+      z-index: 5;
+    }
+    .overlay.show { display: flex; }
+    .modal {
+      width: min(440px, 92%);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .modal h2 { margin: 0 0 6px; font-size: 16px; }
+    .modal p { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+    .steps {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .steps b { color: var(--accent); }
+    .dl { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; font-size: 13px; }
+    .dl dt { color: var(--muted); }
+    .dl dd { margin: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+    .site-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .note {
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 20px;
+    }
+    .note strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">客户端产品设计 · 对齐 docs 已定协议</div>
+    <h1>用户只管登录、连商家、看报表。任务后台自己跑。</h1>
+    <p class="lede">
+      没有「运行任务」按钮。多端登录不互踢；没装扩展的电脑只看数据。
+      商家账密不进客户端。安装时绑定平台酒店，之后只核对、不再选店。
+    </p>
+
+    <div class="principles">
+      <article>
+        <h3>账号</h3>
+        <p>产品登录可多开。任务只打给当前扩展在线的第一台。</p>
+      </article>
+      <article>
+        <h3>执行端</h3>
+        <p>不装扩展 = 只读。0 台提示；≥2 台取绑定扩展最早的那台。</p>
+      </article>
+      <article>
+        <h3>酒店</h3>
+        <p>安装时「绑定酒店」从 Chrome 读 ID，同步后端。错店停，不静默切。</p>
+      </article>
+      <article>
+        <h3>执行</h3>
+        <p>API 优先。评论回复：分页 → bot 生成 → 页内提交 → 入库。用户看不见 workflow。</p>
+      </article>
+    </div>
+
+    <h2>场景（点一下切界面状态）</h2>
+    <div class="scenes">
+      <button type="button" class="btn primary" data-scene="login">未登录</button>
+      <button type="button" class="btn" data-scene="onboard">首次安装</button>
+      <button type="button" class="btn" data-scene="ready">执行端就绪</button>
+      <button type="button" class="btn" data-scene="viewer">只看报表</button>
+      <button type="button" class="btn" data-scene="noext">未装扩展</button>
+      <button type="button" class="btn" data-scene="loginreq">商家要登录</button>
+      <button type="button" class="btn" data-scene="mismatch">当前不是目标店</button>
+      <button type="button" class="btn" data-scene="running">后台回复评论中</button>
+    </div>
+
+    <div class="app-chrome" id="app">
+      <div class="titlebar">
+        <div class="left">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          门店客户端
+        </div>
+        <span class="jobchip idle" id="jobchip">未登录</span>
+      </div>
+
+      <div id="view-login" class="view active">
+        <div class="login-box">
+          <h1>登录</h1>
+          <p class="hint">产品账号。用来拉报表和下发任务，不是携程 / 美团账号。</p>
+          <div class="form-row">
+            <label>手机号</label>
+            <input value="13800138000" />
+          </div>
+          <div class="form-row">
+            <label>验证码</label>
+            <input value="248163" />
+          </div>
+          <button type="button" class="btn primary" id="btnLogin">进入</button>
+        </div>
+      </div>
+
+      <div id="view-onboard" class="view">
+        <div class="login-box" style="max-width:460px">
+          <div class="steps" id="onboardSteps"></div>
+          <div id="onboardBody"></div>
+        </div>
+      </div>
+
+      <div id="view-app" class="view">
+        <div class="app-body">
+          <aside class="nav">
+            <div class="product">
+              <small>杭州西湖店</small>
+              <b>门店客户端</b>
+            </div>
+            <button type="button" class="item" data-view="reports" aria-current="page">报表</button>
+            <button type="button" class="item" data-view="sites">商家连接</button>
+            <button type="button" class="item" data-view="account">账户</button>
+            <div class="spacer"></div>
+            <div class="ext on" id="extBadge">扩展已连接</div>
+          </aside>
+          <main class="stage">
+            <div class="banner warn" id="banner"></div>
+
+            <section id="view-reports" class="view active">
+              <div class="row">
+                <div>
+                  <h1>报表</h1>
+                  <p>后端下发、本机执行后回传的结果。没有手动运行。</p>
+                </div>
+              </div>
+              <div class="kpis">
+                <div class="kpi"><span>今日已回复</span><strong id="kpiReply">12</strong></div>
+                <div class="kpi"><span>好评 / 差评</span><strong id="kpiScore">9 / 3</strong></div>
+                <div class="kpi"><span>待执行任务</span><strong id="kpiWait">0</strong></div>
+              </div>
+              <article class="card">
+                <h3>携程评论回复 <span class="pill ok" id="rep1pill">今天 14:02 完成</span></h3>
+                <p id="rep1">T-10421 · 回复 12 · 好评 9 · 差评 3 · 跳过 4</p>
+              </article>
+              <article class="card">
+                <h3>美团订单汇总 <span class="pill ok">今天 11:18 完成</span></h3>
+                <p>T-10408 · 128 笔 · ¥186,420</p>
+              </article>
+              <article class="card" id="repFail">
+                <h3>携程评论回复 <span class="pill bad">失败</span></h3>
+                <p>LOGIN_REQUIRED · 未回复。数字为 0，不编造。</p>
+              </article>
+            </section>
+
+            <section id="view-sites" class="view">
+              <div class="row">
+                <div>
+                  <h1>商家连接</h1>
+                  <p>不收商家密码。Chrome 登录 + 绑定酒店。没有酒店下拉给每单选店。</p>
+                </div>
+              </div>
+              <article class="card">
+                <h3>携程 EBK</h3>
+                <p class="hint" id="ctripHint">
+                  <span class="pill ok">扩展在线</span>
+                  <span class="pill ok">Chrome 已登录</span>
+                  <span class="pill ok">已绑定 杭州西湖店 · 1678321</span>
+                </p>
+                <div class="site-actions">
+                  <button type="button" class="btn" id="btnOpenCtrip">在浏览器打开</button>
+                  <button type="button" class="btn" id="btnBindCtrip">重新绑定酒店</button>
+                </div>
+              </article>
+              <article class="card">
+                <h3>美团</h3>
+                <p class="hint">
+                  <span class="pill warn">未绑定</span>
+                  该平台任务不会下发，直到绑定成功。
+                </p>
+                <div class="site-actions">
+                  <button type="button" class="btn primary" id="btnBindMeituan">绑定酒店</button>
+                </div>
+              </article>
+            </section>
+
+            <section id="view-account" class="view">
+              <div class="row">
+                <div>
+                  <h1>账户</h1>
+                  <p>产品身份。本机是否执行端由「有没有扩展」决定，没有开关。</p>
+                </div>
+                <button type="button" class="btn" id="btnLogout">退出</button>
+              </div>
+              <dl class="dl">
+                <dt>姓名</dt><dd>王敏</dd>
+                <dt>手机</dt><dd>13800138000</dd>
+                <dt>组织</dt><dd>杭州西湖店</dd>
+                <dt>本机角色</dt><dd id="roleDd">执行端 · 扩展首次绑定 2026-03-01</dd>
+                <dt>商家密码</dt><dd>不保存 · 登录态在 Chrome</dd>
+              </dl>
+            </section>
+          </main>
+        </div>
+      </div>
+
+      <div class="overlay" id="modal" role="dialog">
+        <div class="modal">
+          <h2 id="modalTitle"></h2>
+          <p id="modalBody"></p>
+          <button type="button" class="btn primary" id="modalOk">确定</button>
+          <button type="button" class="btn" id="modalCancel" style="margin-left:8px">稍后</button>
+        </div>
+      </div>
+    </div>
+
+    <h2>界面里有什么、没有什么</h2>
+    <table>
+      <thead>
+        <tr><th>有</th><th>没有</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>登录、报表、商家连接、账户</td>
+          <td>运行任务、任务目录、Prompt、workflow JSON</td>
+        </tr>
+        <tr>
+          <td>安装向导：装扩展（可跳过）→ 绑定酒店</td>
+          <td>「设为执行端」开关；每单再选一次酒店</td>
+        </tr>
+        <tr>
+          <td>去浏览器登录 / 切换到指定店 / 去装扩展</td>
+          <td>商家账密表单、验证码格子、静默切店</td>
+        </tr>
+        <tr>
+          <td>顶栏：空闲 / 执行中 / 请处理（登录、错店、无扩展）</td>
+          <td>把 Cookie、config 文件名展示给用户</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>和协议的对应</strong>
+      报表数字来自回传 outputSchema.metrics。商家连接页的绑定写入 platformHotelId 并同步后端。
+      未装扩展的客户端只有 REST，收不到任务。错店、登录失效暂停当前单，metrics 为 0。
+    </div>
+  </div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const state = {
+      scene: "login",
+      onboardStep: 0,
+      inner: "reports",
+      modalKind: null,
+    };
+
+    function setChip(text, cls) {
+      const el = $("#jobchip");
+      el.textContent = text;
+      el.className = "jobchip " + (cls || "");
+    }
+
+    function showShell(which) {
+      ["login", "onboard", "app"].forEach((id) => {
+        $("#view-" + id).classList.toggle("active", id === which);
+      });
+    }
+
+    function showInner(id) {
+      state.inner = id;
+      ["reports", "sites", "account"].forEach((v) => {
+        document.getElementById("view-" + v).classList.toggle("active", v === id);
+      });
+      document.querySelectorAll(".nav .item").forEach((b) => {
+        if (b.dataset.view === id) b.setAttribute("aria-current", "page");
+        else b.removeAttribute("aria-current");
+      });
+    }
+
+    function banner(html, kind) {
+      const el = $("#banner");
+      if (!html) {
+        el.classList.remove("show");
+        el.innerHTML = "";
+        return;
+      }
+      el.className = "banner show " + (kind || "warn");
+      el.innerHTML = html;
+    }
+
+    function hideModal() {
+      $("#modal").classList.remove("show");
+      state.modalKind = null;
+    }
+
+    function showModal(kind, title, body, okText) {
+      state.modalKind = kind;
+      $("#modalTitle").textContent = title;
+      $("#modalBody").textContent = body;
+      $("#modalOk").textContent = okText || "确定";
+      $("#modal").classList.add("show");
+    }
+
+    function renderOnboard() {
+      const labels = ["1 扩展", "2 绑定酒店", "3 完成"];
+      $("#onboardSteps").innerHTML = labels
+        .map((t, i) => (i === state.onboardStep ? `<b>${t}</b>` : `<span>${t}</span>`))
+        .join(" · ");
+      const body = $("#onboardBody");
+      if (state.onboardStep === 0) {
+        body.innerHTML = `
+          <h1>安装浏览器扩展</h1>
+          <p class="hint">要跑任务必须装。只看报表可以跳过，这台电脑不会收到任务。</p>
+          <button type="button" class="btn primary" id="btnExtDone">我已安装并打开扩展</button>
+          <button type="button" class="btn" id="btnSkipExt" style="margin-left:8px">这台只看报表</button>`;
+        $("#btnExtDone").onclick = () => { state.onboardStep = 1; renderOnboard(); };
+        $("#btnSkipExt").onclick = () => applyScene("viewer");
+      } else if (state.onboardStep === 1) {
+        body.innerHTML = `
+          <h1>绑定酒店</h1>
+          <p class="hint">先在 Chrome 打开携程 EBK，把顶栏切到要抓的那家店，再点绑定。我们读取当前店，不手填 ID。</p>
+          <button type="button" class="btn primary" id="btnDoBind">绑定当前酒店</button>`;
+        $("#btnDoBind").onclick = () => {
+          showModal(
+            "bind",
+            "确认绑定",
+            "将绑定携程 EBK：杭州西湖店（1678321）。确认后同步到后端，该平台任务才能下发。",
+            "确认绑定",
+          );
+        };
+      } else {
+        body.innerHTML = `
+          <h1>可以待命了</h1>
+          <p class="hint">任务由后端下发。请保持 Chrome 已登录商家后台。报表出来后在左侧查看。</p>
+          <button type="button" class="btn primary" id="btnOnboardDone">进入客户端</button>`;
+        $("#btnOnboardDone").onclick = () => applyScene("ready");
+      }
+    }
+
+    function applyScene(name) {
+      state.scene = name;
+      document.querySelectorAll(".scenes .btn").forEach((b) => {
+        b.classList.toggle("primary", b.dataset.scene === name);
+      });
+      hideModal();
+      $("#repFail").style.display = "none";
+      $("#kpiWait").textContent = "0";
+      $("#kpiReply").textContent = "12";
+      $("#kpiScore").textContent = "9 / 3";
+      $("#rep1pill").className = "pill ok";
+      $("#rep1pill").textContent = "今天 14:02 完成";
+      $("#rep1").textContent = "T-10421 · 回复 12 · 好评 9 · 差评 3 · 跳过 4";
+      $("#extBadge").className = "ext on";
+      $("#extBadge").textContent = "扩展已连接";
+      $("#roleDd").textContent = "执行端 · 扩展首次绑定 2026-03-01";
+      $("#ctripHint").innerHTML = `<span class="pill ok">扩展在线</span><span class="pill ok">Chrome 已登录</span><span class="pill ok">已绑定 杭州西湖店 · 1678321</span>`;
+      banner("");
+
+      if (name === "login") {
+        showShell("login");
+        setChip("未登录", "idle");
+        return;
+      }
+      if (name === "onboard") {
+        state.onboardStep = 0;
+        showShell("onboard");
+        setChip("安装向导", "wait");
+        renderOnboard();
+        return;
+      }
+
+      showShell("app");
+      showInner("reports");
+
+      if (name === "ready") {
+        setChip("空闲 · 等待任务", "idle");
+      } else if (name === "viewer") {
+        setChip("只读 · 本机不执行", "idle");
+        $("#extBadge").className = "ext off";
+        $("#extBadge").textContent = "未装扩展 · 只看报表";
+        $("#roleDd").textContent = "只读 · 任务在其他已装扩展的电脑上跑";
+        $("#ctripHint").innerHTML = `<span class="pill warn">本机无扩展</span><span class="pill ok">已绑定（账号级）杭州西湖店</span>`;
+        banner("这台电脑只看报表。任务只会打到已安装扩展的电脑。", "warn");
+      } else if (name === "noext") {
+        setChip("待执行 · 未装扩展", "wait");
+        $("#extBadge").className = "ext off";
+        $("#extBadge").textContent = "未装扩展";
+        $("#kpiWait").textContent = "1";
+        $("#roleDd").textContent = "未成为执行端";
+        banner(
+          `<strong>请在一台电脑上安装并打开浏览器扩展</strong>账号下还没有执行端，评论回复任务未下发。`,
+          "warn",
+        );
+        $("#ctripHint").innerHTML = `<span class="pill warn">扩展未连接</span><span class="pill warn">未绑定</span>`;
+      } else if (name === "loginreq") {
+        setChip("请在浏览器登录", "wait");
+        showInner("reports");
+        $("#kpiWait").textContent = "1";
+        $("#repFail").style.display = "block";
+        banner(
+          `<strong>任务已暂停：商家后台需要登录</strong>请在 Chrome 里按平时习惯登录携程 EBK（短信、扫码、滑块均可）。我们不收集密码。
+           <div style="margin-top:8px"><button type="button" class="btn primary" id="btnGoLogin">打开登录页</button></div>`,
+          "warn",
+        );
+        $("#btnGoLogin").onclick = () =>
+          showModal("chrome-login", "请在 Chrome 里登录", "已打开携程 EBK 登录页。完成后点「我已登录」。", "我已登录，继续");
+      } else if (name === "mismatch") {
+        setChip("请切换到杭州西湖店", "wait");
+        $("#kpiWait").textContent = "1";
+        banner(
+          `<strong>当前商家后台是「上海静安店」</strong>本单要抓「杭州西湖店」(1678321)。请在 EBK 顶栏切换后等待，或点「已切换」。不要在客户端改绑定来迁就当前页。
+           <div style="margin-top:8px"><button type="button" class="btn primary" id="btnSwitched">已切换到目标店</button></div>`,
+          "warn",
+        );
+        $("#btnSwitched").onclick = () => applyScene("running");
+      } else if (name === "running") {
+        setChip("后台执行中 · 携程评论回复", "");
+        $("#kpiReply").textContent = "—";
+        $("#kpiScore").textContent = "—";
+        $("#rep1pill").className = "pill";
+        $("#rep1pill").textContent = "进行中";
+        $("#rep1").textContent = "分页拉取 → 生成回复 → 提交 → 入库。请保持 Chrome 不要切店。";
+      }
+    }
+
+    document.querySelectorAll(".scenes .btn").forEach((b) => {
+      b.addEventListener("click", () => applyScene(b.dataset.scene));
+    });
+    document.querySelectorAll(".nav .item").forEach((b) => {
+      b.addEventListener("click", () => showInner(b.dataset.view));
+    });
+    $("#btnLogin").addEventListener("click", () => applyScene("onboard"));
+    $("#btnLogout").addEventListener("click", () => applyScene("login"));
+    $("#btnOpenCtrip").addEventListener("click", () =>
+      showModal("open", "已在浏览器打开", "已打开携程 EBK。登录和切店都在网页里完成。", "好"),
+    );
+    $("#btnBindCtrip").addEventListener("click", () => {
+      showInner("sites");
+      showModal(
+        "bind",
+        "确认绑定",
+        "当前 Chrome 为杭州西湖店（1678321）。确认后覆盖本账号的携程绑定。",
+        "确认绑定",
+      );
+    });
+    $("#btnBindMeituan").addEventListener("click", () =>
+      showModal(
+        "bind-mt",
+        "绑定美团酒店",
+        "请先在 Chrome 打开美团商家后台并切到目标店，再确认。将读取当前店 ID。",
+        "读取并绑定",
+      ),
+    );
+    $("#modalCancel").addEventListener("click", hideModal);
+    $("#modalOk").addEventListener("click", () => {
+      const kind = state.modalKind;
+      hideModal();
+      if (kind === "bind" && state.scene === "onboard") {
+        state.onboardStep = 2;
+        renderOnboard();
+      } else if (kind === "chrome-login") {
+        applyScene("running");
+      } else if (kind === "bind-mt") {
+        showInner("sites");
+      }
+    });
+
+    applyScene("login");
+  </script>
+</body>
+</html>

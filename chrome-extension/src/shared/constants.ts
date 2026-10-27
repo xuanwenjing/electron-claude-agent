@@ -1,0 +1,12 @@
+/** 扩展内共享常量 */
+
+export const WS_URL = "ws://127.0.0.1:19283";
+
+/** 相对扩展根目录（dist），供 chrome.scripting.executeScript */
+export const CONTENT_SCRIPT_FILE = "content/index.js";
+export const PAGE_FETCH_PROXY_FILE = "page/fetchProxy.js";
+
+/** content ↔ MAIN 世界 postMessage 约定 */
+export const PAGE_FETCH_SOURCE = "crawl-page-fetch-proxy";
+export const XHR_RESPONSE_TYPE = "CRAWL_XHR_RESPONSE";
+export const XHR_RESPONSE_MSG = "XHR_RESPONSE";

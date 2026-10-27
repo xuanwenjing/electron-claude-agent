@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>账号与执行端 · 多端不冲突</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
+    .kicker {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }
+    h2 { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
+    .lede { color: var(--muted); max-width: 72ch; margin: 0 0 28px; }
+    code { font-family: var(--mono); font-size: 12px; }
+
+    .chain {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 800px) { .chain { grid-template-columns: 1fr 1fr; } }
+    .chain article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 118px;
+    }
+    .chain .n { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }
+    .chain h3 { margin: 0 0 4px; font-size: 13px; }
+    .chain p { margin: 0; font-size: 12px; color: var(--muted); }
+
+    .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    @media (max-width: 800px) { .three { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 14px; }
+    .card p { margin: 0; font-size: 13px; color: var(--muted); }
+    .who {
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }
+    .who.ok { background: var(--ok-soft); color: var(--ok); }
+    .who.warn { background: var(--warn-soft); color: var(--warn); }
+    .who.bad { background: var(--bad-soft); color: var(--bad); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+
+    .split { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 16px; }
+    @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .devices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    @media (max-width: 700px) { .devices { grid-template-columns: 1fr; } }
+    .device {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .device.pick { border-color: var(--accent); background: var(--accent-soft); }
+    .device.idle { opacity: 0.92; }
+    .device.warn { border-color: var(--warn); background: var(--warn-soft); }
+    .device h3 { margin: 0 0 4px; font-size: 14px; }
+    .device p { margin: 0; font-size: 12px; color: var(--muted); }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .pill {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }
+    .pill.ok { background: var(--ok-soft); color: var(--ok); }
+    .pill.warn { background: var(--warn-soft); color: var(--warn); }
+    .pill.bad { background: var(--bad-soft); color: var(--bad); }
+    .pill.accent { background: var(--accent-soft); color: var(--accent); }
+
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .panel h3 { margin: 0 0 8px; font-size: 14px; }
+    .panel .meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .panel ol { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+    .panel li { margin: 4px 0; }
+
+    pre {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .note {
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+    }
+    .note strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">账号系统 · 多端登录与任务投递</div>
+    <h1>只给装了扩展的客户端下发任务</h1>
+    <p class="lede">
+      看数据：只装客户端。跑任务：客户端 + Chrome 扩展。
+      后端不按账号广播，只看「这个账号下哪些设备扩展在线」。0 台 → 提示安装；1 台 → 打给它；≥2 台 → 取第一台，用户不用选。
+    </p>
+
+    <div class="chain">
+      <article>
+        <div class="n">01</div>
+        <h3>产品账号</h3>
+        <p>身份、报表。N 台同时登录，互不踢下线。</p>
+      </article>
+      <article>
+        <div class="n">02</div>
+        <h3>只装客户端</h3>
+        <p>没有扩展 = 只读。根本不进任务候选。</p>
+      </article>
+      <article>
+        <div class="n">03</div>
+        <h3>客户端 + 扩展</h3>
+        <p>心跳上报 extensionConnected。这才是执行端。</p>
+      </article>
+      <article>
+        <div class="n">04</div>
+        <h3>0 / 1 / N</h3>
+        <p>0 提示；1 直接投；多台取 extensionBoundAt 最早的那台。</p>
+      </article>
+    </div>
+
+    <h2>角色怎么出现</h2>
+    <div class="three">
+      <div class="card">
+        <span class="who ok">只看数据</span>
+        <h3>不装扩展</h3>
+        <p>笔记本登录产品账号看报表即可。没有扩展，后端不会把任务打过来。</p>
+      </div>
+      <div class="card">
+        <span class="who ok">跑任务</span>
+        <h3>装扩展</h3>
+        <p>办公室那台装客户端和扩展。商家后台仍在这台 Chrome 里登录。</p>
+      </div>
+      <div class="card">
+        <span class="who warn">两台都装了</span>
+        <h3>取第一台</h3>
+        <p>不弹窗。按首次绑定扩展的时间排序，永远打给最早那台（且当前在线）。</p>
+      </div>
+    </div>
+
+    <h2>投递规则</h2>
+    <table>
+      <thead>
+        <tr><th>该账号下，扩展当前在线的设备数</th><th>行为</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>0</td>
+          <td>任务保持 <code>WAITING_EXTENSION</code>。所有已登录的客户端提示：「请在一台电脑上安装并打开浏览器扩展」。不让用户挑机器。</td>
+        </tr>
+        <tr>
+          <td>1</td>
+          <td>任务只推到这台。另一台没装扩展，收不到。</td>
+        </tr>
+        <tr>
+          <td>≥2</td>
+          <td>按 <code>extensionBoundAt ASC</code> 取第一台，只 push 给它。其余有扩展的设备也不跑这一单。</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="lede" style="margin-top:12px">
+      「第一台」= 这个账号下第一次上报扩展在线的设备，时间写下 <code>extensionBoundAt</code>，之后不再改。
+      投递时再滤掉当前不在线的；在线集合里仍然按这个时间取最早。不要用心跳新旧、商家 Cookie、打分。
+    </p>
+
+    <h2>两套通道</h2>
+    <table>
+      <thead>
+        <tr><th></th><th>只装客户端</th><th>客户端 + 扩展</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>能做什么</td>
+          <td>登录、报表、账户</td>
+          <td>上面全部 + 收任务、跑 workflow</td>
+        </tr>
+        <tr>
+          <td>通道</td>
+          <td>REST</td>
+          <td>REST + <code>device:{id}</code> 任务通道</td>
+        </tr>
+        <tr>
+          <td>心跳</td>
+          <td>可选，只表示客户端在线</td>
+          <td>必须带 <code>extensionConnected: true</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>数据模型</h2>
+    <div class="split">
+      <div class="card">
+        <h3>核心字段</h3>
+        <pre id="schema"></pre>
+      </div>
+      <div class="card">
+        <h3>心跳（有扩展的设备）</h3>
+        <pre id="heartbeat"></pre>
+      </div>
+    </div>
+
+    <h2>三种现场</h2>
+    <div class="btns">
+      <button type="button" class="btn primary" id="btnA">一跑一看</button>
+      <button type="button" class="btn" id="btnB">两台都装了扩展</button>
+      <button type="button" class="btn" id="btnC">都没装扩展</button>
+    </div>
+    <div class="devices" id="devices"></div>
+    <div class="panel" id="detail"></div>
+
+    <h2>实现上只需卡住这几件事</h2>
+    <table>
+      <thead>
+        <tr><th>点</th><th>做法</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>不要按账号广播</td>
+          <td>任务 push 到选中的 <code>deviceId</code>。没扩展的客户端连这条通道都没有。</td>
+        </tr>
+        <tr>
+          <td>taskId 单飞</td>
+          <td><code>Task.assigneeDeviceId</code> 写下第一台。回传带 deviceId；重复上报丢弃。防止两台扩展同时在线时的竞态。</td>
+        </tr>
+        <tr>
+          <td>第一台离线</td>
+          <td>它不在「当前扩展在线」集合里。若还剩别的扩展在线，取集合里 boundAt 最早的（可能变成原来的第二台）。若一个都不在线 → 走 0 台提示。</td>
+        </tr>
+        <tr>
+          <td>卸扩展 / 重装客户端</td>
+          <td>扩展断开则该设备离开候选。重装客户端会得到新 deviceId，<code>extensionBoundAt</code> 是新的，排序上变成「更晚的一台」。</td>
+        </tr>
+        <tr>
+          <td>商家没登录</td>
+          <td>跟调度无关。任务已经打到第一台，由那台回 <code>LOGIN_REQUIRED</code>，引导在这台 Chrome 登录。不要因为 Cookie 再换一台。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>约定</strong>
+      不跑任务 = 不装扩展。调度只认扩展在线列表：0 提示，1 投它，多台投第一台（<code>extensionBoundAt</code> 最早）。
+      用户不选执行端。商家登录仍在被选中的那台 Chrome 里完成。
+    </div>
+  </div>
+
+  <script>
+    const SCHEMA = `{
+  User     id, ...
+  Device   id, userId, hostname,
+           extensionBoundAt,   // 首次上报扩展在线的时间；只写一次
+           extensionConnected, // 当前心跳
+           seenAt
+  Task     id, userId, status,
+           assigneeDeviceId    // 投给第一台时写入
+}`;
+
+    const HEARTBEAT = `{
+  "deviceId": "dev_desk_01",
+  "userId": "u_88",
+  "extensionConnected": true
+}`;
+
+    document.getElementById("schema").textContent = SCHEMA.trim();
+    document.getElementById("heartbeat").textContent = HEARTBEAT.trim();
+
+    const SCENES = {
+      a: {
+        title: "一跑一看",
+        meta: "办公室装了扩展；笔记本只装客户端。用户无感知。",
+        devices: [
+          {
+            name: "办公室台式机",
+            cls: "pick",
+            pills: [
+              ["客户端", "ok"],
+              ["扩展在线", "ok"],
+              ["第一台 / 唯一", "accent"]
+            ],
+            line: "候选集只有它。任务只推到这台。"
+          },
+          {
+            name: "家里笔记本",
+            cls: "idle",
+            pills: [
+              ["客户端", "ok"],
+              ["未装扩展", "warn"],
+              ["只读", ""]
+            ],
+            line: "看报表。不在候选，收不到任务。"
+          }
+        ],
+        steps: [
+          "过滤：extensionConnected && 心跳未过期 → [desk]。",
+          "n=1，assigneeDeviceId=desk，push 到 device:desk。",
+          "笔记本只有 REST，继续刷报表。"
+        ]
+      },
+      b: {
+        title: "两台都装了扩展",
+        meta: "不弹窗。按 extensionBoundAt 取最早的一台。",
+        devices: [
+          {
+            name: "办公室台式机",
+            cls: "pick",
+            pills: [
+              ["扩展在线", "ok"],
+              ["boundAt 更早", "accent"],
+              ["本单执行端", "ok"]
+            ],
+            line: "2026-03-01 首次连上扩展。排序第一。"
+          },
+          {
+            name: "备用机",
+            cls: "idle",
+            pills: [
+              ["扩展在线", "ok"],
+              ["boundAt 更晚", ""],
+              ["不跑这一单", "warn"]
+            ],
+            line: "2026-09-18 才装的扩展。在线也不投。"
+          }
+        ],
+        steps: [
+          "候选 = 两台都在线且有扩展。",
+          "按 extensionBoundAt ASC → desk。",
+          "只 push 给 desk。备用机保持登录，不当执行端。"
+        ]
+      },
+      c: {
+        title: "都没装扩展",
+        meta: "任务不下发。已登录的客户端给出同一条提示。",
+        devices: [
+          {
+            name: "办公室台式机",
+            cls: "warn",
+            pills: [
+              ["客户端", "ok"],
+              ["未装扩展", "warn"]
+            ],
+            line: "能看报表。不能跑任务。"
+          },
+          {
+            name: "家里笔记本",
+            cls: "warn",
+            pills: [
+              ["客户端", "ok"],
+              ["未装扩展", "warn"]
+            ],
+            line: "同样只读。"
+          }
+        ],
+        steps: [
+          "候选 = []，status=WAITING_EXTENSION。",
+          "两端都提示：请在一台电脑上安装并打开浏览器扩展。",
+          "任意一台装上并心跳成功后，n=1，自动投过去，提示消失。"
+        ]
+      }
+    };
+
+    let scene = "a";
+
+    function render() {
+      const s = SCENES[scene];
+      document.getElementById("devices").innerHTML = s.devices.map((d) => `
+        <div class="device ${d.cls}">
+          <h3>${d.name}</h3>
+          <p>${d.line}</p>
+          <div class="pills">${d.pills.map(([t, k]) => `<span class="pill ${k}">${t}</span>`).join("")}</div>
+        </div>
+      `).join("");
+      document.getElementById("detail").innerHTML = `
+        <h3>${s.title}</h3>
+        <div class="meta">${s.meta}</div>
+        <ol>${s.steps.map((x) => `<li>${x}</li>`).join("")}</ol>
+      `;
+    }
+
+    function setScene(id) {
+      scene = id;
+      document.querySelectorAll(".btns .btn").forEach((b) => b.classList.remove("primary"));
+      document.getElementById({ a: "btnA", b: "btnB", c: "btnC" }[id]).classList.add("primary");
+      render();
+    }
+
+    document.getElementById("btnA").addEventListener("click", () => setScene("a"));
+    document.getElementById("btnB").addEventListener("click", () => setScene("b"));
+    document.getElementById("btnC").addEventListener("click", () => setScene("c"));
+    render();
+  </script>
+</body>
+</html>

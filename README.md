@@ -25,8 +25,12 @@ npm start
 
 | 路径 | 作用 |
 |------|------|
-| `src/main/runAgent.ts` | 调用 `query()`，配置 Skill / Bash / 权限 |
-| `src/main/resolveClaudeCli.ts` | 解析 Claude 原生二进制（处理 asar 解包） |
+| `src/main/index.ts` | 应用生命周期入口 |
+| `src/main/agent/` | Agent：`runAgent.ts` 调用 `query()`，`crawlMcp.ts` / `pythonMcp.ts` 工具，`resolveClaudeCli.ts` 解析 Claude 原生二进制 |
+| `src/main/crawl/` | 与 Chrome 扩展通信的 WebSocket bridge、打开浏览器 |
+| `src/main/ipc/` | 渲染进程 IPC 处理（agent / crawl / db / update） |
+| `src/main/update/` | 客户端自动更新、Chrome 扩展安装与远程更新 |
+| `src/main/db/` | SQLite（drizzle） |
 | `resources/skills-plugin/` | 内置 Skill 插件 |
 | `workspace/` | Agent 工作区（cwd） |
 | `build/entitlements.mac.plist` | macOS 允许 spawn 子进程 |

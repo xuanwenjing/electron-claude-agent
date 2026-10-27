@@ -1,0 +1,2106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>客户端设计汇总</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+
+    :root {
+      --bg: #f4f1ea;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --ok: #2f6b4f;
+      --warn: #8a5a12;
+      --bad: #8b3a3a;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      display: flex;
+      min-height: 100vh;
+    }
+    .rail {
+      position: sticky;
+      top: 0;
+      align-self: flex-start;
+      z-index: 40;
+      width: 248px;
+      min-height: 100vh;
+      flex: 0 0 248px;
+      padding: 22px 16px 28px;
+      border-right: 1px solid var(--line);
+      background: #efeae0;
+    }
+    .brand {
+      padding: 4px 8px 18px;
+    }
+    .brand small {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .brand strong { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+    .tabs {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .tabs button {
+      display: block;
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+      padding: 12px 12px 12px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      line-height: 1.35;
+    }
+    .tabs button small {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      font-weight: 400;
+    }
+    .tabs button b {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .tabs button em {
+      display: inline-block;
+      font-style: normal;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 2px;
+    }
+    .tabs button:hover { background: rgba(255,255,255,0.45); }
+    .tabs button[aria-selected="true"] {
+      background: var(--paper);
+      border-color: #c9c0ad;
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .tabs button[aria-selected="true"] em { color: var(--accent); }
+    .doc-stage { flex: 1; min-width: 0; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    #tab-product.active {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+
+    /* ===== workflow-task-core.html ===== */
+:root{
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }#tab-task, #tab-task *{ box-sizing: border-box; }#tab-task, #tab-task{ margin: 0; }#tab-task{
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }#tab-task .wrap{ max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }#tab-task .kicker{
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }#tab-task h1{ font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }#tab-task h2{ font-size: 15px; font-weight: 600; margin: 28px 0 12px; }#tab-task .lede{ color: var(--muted); max-width: 70ch; margin: 0 0 28px; }#tab-task .chain{
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 28px;
+    }@media (max-width: 900px) {#tab-task .chain{ grid-template-columns: 1fr 1fr 1fr; }}#tab-task .chain article{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 118px;
+    }#tab-task .chain .n{ font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }#tab-task .chain h3{ margin: 0 0 4px; font-size: 13px; }#tab-task .chain p{ margin: 0; font-size: 12px; color: var(--muted); }#tab-task .chain article.back{ border-color: var(--accent); background: var(--accent-soft); }#tab-task .chain article.back .n, #tab-task .chain article.back h3{ color: var(--accent); }#tab-task .three{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; }@media (max-width: 800px) {#tab-task .three{ grid-template-columns: 1fr; }}#tab-task .card{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }#tab-task .card h3{ margin: 0 0 6px; font-size: 14px; }#tab-task .card p{ margin: 0; font-size: 13px; color: var(--muted); }#tab-task .who{
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }#tab-task .who.ext{ background: var(--ok-soft); color: var(--ok); }#tab-task .who.agent{ background: var(--accent-soft); color: var(--accent); }#tab-task pre, #tab-task code{ font-family: var(--mono); }#tab-task pre{
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }#tab-task .steps{ display: grid; gap: 8px; }#tab-task .step{
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 12px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      width: 100%;
+    }#tab-task .step:hover{ background: #f7f5ef; }#tab-task .step.on{ border-color: var(--accent); background: var(--accent-soft); }#tab-task .step.fail{ border-color: var(--bad); background: var(--bad-soft); }#tab-task .idx{
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+      padding-top: 2px;
+    }#tab-task .step.fail .idx{ color: var(--bad); }#tab-task .step h3{ margin: 0 0 2px; font-size: 14px; }#tab-task .step p{ margin: 0; font-size: 13px; color: var(--muted); }#tab-task .split{ display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 16px; }@media (max-width: 860px) {#tab-task .split{ grid-template-columns: 1fr; }}#tab-task .panel{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 280px;
+    }#tab-task .panel h3{ margin: 0 0 10px; font-size: 14px; }#tab-task .panel .meta{ font-size: 12px; color: var(--muted); margin-bottom: 10px; }#tab-task .kpis{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }#tab-task .kpi{ background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }#tab-task .kpi span{ display: block; font-size: 11px; color: var(--muted); }#tab-task .kpi strong{ font-size: 20px; letter-spacing: -0.03em; }#tab-task .pill{
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--ok-soft);
+      color: var(--ok);
+    }#tab-task .pill.bad{ background: var(--bad-soft); color: var(--bad); }#tab-task .pill.warn{ background: var(--warn-soft); color: var(--warn); }#tab-task .btns{ display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }#tab-task .btn{
+      border: 1px solid var(--line);
+      background: var(--paper);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }#tab-task .btn.primary{ background: var(--accent); border-color: var(--accent); color: #fff; }#tab-task table{
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }#tab-task th, #tab-task td{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }#tab-task th{ background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }#tab-task tr:last-child td{ border-bottom: 0; }#tab-task .note{
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+    }#tab-task .note strong{ display: block; margin-bottom: 4px; }
+    /* ===== account-device-model.html ===== */
+:root{
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }#tab-account, #tab-account *{ box-sizing: border-box; }#tab-account, #tab-account{ margin: 0; }#tab-account{
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }#tab-account .wrap{ max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }#tab-account .kicker{
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }#tab-account h1{ font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }#tab-account h2{ font-size: 15px; font-weight: 600; margin: 28px 0 12px; }#tab-account .lede{ color: var(--muted); max-width: 72ch; margin: 0 0 28px; }#tab-account code{ font-family: var(--mono); font-size: 12px; }#tab-account .chain{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 28px;
+    }@media (max-width: 800px) {#tab-account .chain{ grid-template-columns: 1fr 1fr; }}#tab-account .chain article{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 118px;
+    }#tab-account .chain .n{ font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }#tab-account .chain h3{ margin: 0 0 4px; font-size: 13px; }#tab-account .chain p{ margin: 0; font-size: 12px; color: var(--muted); }#tab-account .three{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }@media (max-width: 800px) {#tab-account .three{ grid-template-columns: 1fr; }}#tab-account .card{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }#tab-account .card h3{ margin: 0 0 6px; font-size: 14px; }#tab-account .card p{ margin: 0; font-size: 13px; color: var(--muted); }#tab-account .who{
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }#tab-account .who.ok{ background: var(--ok-soft); color: var(--ok); }#tab-account .who.warn{ background: var(--warn-soft); color: var(--warn); }#tab-account .who.bad{ background: var(--bad-soft); color: var(--bad); }#tab-account table{
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }#tab-account th, #tab-account td{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }#tab-account th{ background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }#tab-account tr:last-child td{ border-bottom: 0; }#tab-account .split{ display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 16px; }@media (max-width: 860px) {#tab-account .split{ grid-template-columns: 1fr; }}#tab-account .btns{ display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }#tab-account .btn{
+      border: 1px solid var(--line);
+      background: var(--paper);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }#tab-account .btn.primary{ background: var(--accent); border-color: var(--accent); color: #fff; }#tab-account .devices{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }@media (max-width: 700px) {#tab-account .devices{ grid-template-columns: 1fr; }}#tab-account .device{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }#tab-account .device.pick{ border-color: var(--accent); background: var(--accent-soft); }#tab-account .device.idle{ opacity: 0.92; }#tab-account .device.warn{ border-color: var(--warn); background: var(--warn-soft); }#tab-account .device h3{ margin: 0 0 4px; font-size: 14px; }#tab-account .device p{ margin: 0; font-size: 12px; color: var(--muted); }#tab-account .pills{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }#tab-account .pill{
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }#tab-account .pill.ok{ background: var(--ok-soft); color: var(--ok); }#tab-account .pill.warn{ background: var(--warn-soft); color: var(--warn); }#tab-account .pill.bad{ background: var(--bad-soft); color: var(--bad); }#tab-account .pill.accent{ background: var(--accent-soft); color: var(--accent); }#tab-account .panel{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }#tab-account .panel h3{ margin: 0 0 8px; font-size: 14px; }#tab-account .panel .meta{ font-size: 12px; color: var(--muted); margin-bottom: 10px; }#tab-account .panel ol{ margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }#tab-account .panel li{ margin: 4px 0; }#tab-account pre{
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }#tab-account .note{
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+    }#tab-account .note strong{ display: block; margin-bottom: 4px; }
+    /* ===== hotel-context.html ===== */
+:root{
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }#tab-hotel, #tab-hotel *{ box-sizing: border-box; }#tab-hotel, #tab-hotel{ margin: 0; }#tab-hotel{
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }#tab-hotel .wrap{ max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }#tab-hotel .kicker{
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }#tab-hotel h1{ font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }#tab-hotel h2{ font-size: 15px; font-weight: 600; margin: 28px 0 12px; }#tab-hotel .lede{ color: var(--muted); max-width: 72ch; margin: 0 0 28px; }#tab-hotel code{ font-family: var(--mono); font-size: 12px; }#tab-hotel .chain{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 28px;
+    }@media (max-width: 800px) {#tab-hotel .chain{ grid-template-columns: 1fr 1fr; }}#tab-hotel .chain article{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 118px;
+    }#tab-hotel .chain .n{ font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }#tab-hotel .chain h3{ margin: 0 0 4px; font-size: 13px; }#tab-hotel .chain p{ margin: 0; font-size: 12px; color: var(--muted); }#tab-hotel .three{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }@media (max-width: 800px) {#tab-hotel .three{ grid-template-columns: 1fr; }}#tab-hotel .card{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }#tab-hotel .card h3{ margin: 0 0 6px; font-size: 14px; }#tab-hotel .card p{ margin: 0; font-size: 13px; color: var(--muted); }#tab-hotel .who{
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }#tab-hotel .who.ok{ background: var(--ok-soft); color: var(--ok); }#tab-hotel .who.warn{ background: var(--warn-soft); color: var(--warn); }#tab-hotel .who.bad{ background: var(--bad-soft); color: var(--bad); }#tab-hotel table{
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }#tab-hotel th, #tab-hotel td{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }#tab-hotel th{ background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }#tab-hotel tr:last-child td{ border-bottom: 0; }#tab-hotel .split{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }@media (max-width: 860px) {#tab-hotel .split{ grid-template-columns: 1fr; }}#tab-hotel .btns{ display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }#tab-hotel .btn{
+      border: 1px solid var(--line);
+      background: var(--paper);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }#tab-hotel .btn.primary{ background: var(--accent); border-color: var(--accent); color: #fff; }#tab-hotel .panel{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }#tab-hotel .panel h3{ margin: 0 0 8px; font-size: 14px; }#tab-hotel .panel .meta{ font-size: 12px; color: var(--muted); margin-bottom: 10px; }#tab-hotel .panel ol{ margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }#tab-hotel .panel li{ margin: 4px 0; }#tab-hotel pre{
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }#tab-hotel .note{
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+    }#tab-hotel .note strong{ display: block; margin-bottom: 4px; }#tab-hotel .warn-box{
+      background: var(--warn-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin: 16px 0;
+    }#tab-hotel .warn-box strong{ display: block; margin-bottom: 4px; color: var(--warn); }
+    /* ===== client-product.html ===== */
+:root{
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --sidebar: #f7f4ee;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }#tab-product, #tab-product *{ box-sizing: border-box; }#tab-product, #tab-product{ margin: 0; }#tab-product{
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }#tab-product .wrap{ max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }#tab-product .kicker{
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }#tab-product h1{ font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }#tab-product h2{ font-size: 15px; font-weight: 600; margin: 28px 0 12px; }#tab-product .lede{ color: var(--muted); max-width: 72ch; margin: 0 0 20px; }#tab-product code{ font-family: var(--mono); font-size: 12px; }#tab-product .principles{
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+    }@media (max-width: 900px) {#tab-product .principles{ grid-template-columns: 1fr 1fr; }}#tab-product .principles article{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }#tab-product .principles h3{ margin: 0 0 4px; font-size: 13px; }#tab-product .principles p{ margin: 0; font-size: 12px; color: var(--muted); }#tab-product .scenes{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }#tab-product .btn{
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }#tab-product .btn.primary{ background: var(--accent); border-color: var(--accent); color: #fff; }#tab-product .btn:disabled{ opacity: 0.45; cursor: not-allowed; }#tab-product .app-chrome{
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--paper);
+    }#tab-product .titlebar{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-2);
+      font-size: 12px;
+      color: var(--muted);
+    }#tab-product .titlebar .left{ display: flex; align-items: center; gap: 10px; }#tab-product .dots{ display: flex; gap: 6px; }#tab-product .dots i{ width: 9px; height: 9px; border-radius: 50%; background: #c9c2b4; display: block; }#tab-product .jobchip{
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }#tab-product .jobchip.wait{ background: var(--warn-soft); color: var(--warn); }#tab-product .jobchip.idle{ background: var(--bg); color: var(--muted); }#tab-product .jobchip.bad{ background: var(--bad-soft); color: var(--bad); }#tab-product .app-body{ display: flex; min-height: 580px; align-items: stretch; }#tab-product .nav{
+      width: 200px;
+      flex-shrink: 0;
+      background: var(--sidebar);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      padding: 16px 10px 12px;
+    }#tab-product .nav .product{ padding: 0 8px 14px; }#tab-product .nav .product small{
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }#tab-product .nav .product b{ font-size: 15px; }#tab-product .nav button.item{
+      display: flex;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      font-size: 13px;
+      color: var(--ink);
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }#tab-product .nav button.item[aria-current="page"]{ background: var(--accent-soft); color: var(--accent); }#tab-product .nav .spacer{ flex: 1; }#tab-product .ext{
+      margin: 8px;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: center;
+    }#tab-product .ext.on{ background: var(--ok-soft); color: var(--ok); }#tab-product .ext.off{ background: var(--warn-soft); color: var(--warn); }#tab-product .stage{ flex: 1; min-width: 0; padding: 22px 24px 28px; }#tab-product .view{ display: none; }#tab-product .view.active{ display: block; }#tab-product .row{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }#tab-product .row h1{ font-size: 20px; margin: 0 0 4px; }#tab-product .row p{ margin: 0; color: var(--muted); font-size: 13px; }#tab-product .kpis{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }#tab-product .kpi{
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+    }#tab-product .kpi span{ display: block; font-size: 11px; color: var(--muted); }#tab-product .kpi strong{ font-size: 18px; letter-spacing: -0.03em; }#tab-product .card{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      background: var(--paper);
+    }#tab-product .card h3{ margin: 0 0 6px; font-size: 14px; }#tab-product .card p{ margin: 0; font-size: 13px; color: var(--muted); }#tab-product .pill{
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--bg-2);
+      color: var(--muted);
+      margin-right: 6px;
+    }#tab-product .pill.ok{ background: var(--ok-soft); color: var(--ok); }#tab-product .pill.warn{ background: var(--warn-soft); color: var(--warn); }#tab-product .pill.bad{ background: var(--bad-soft); color: var(--bad); }#tab-product .hint{ font-size: 12px; color: var(--muted); margin: 0 0 14px; }#tab-product .banner{
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      display: none;
+    }#tab-product .banner.show{ display: block; }#tab-product .banner strong{ display: block; margin-bottom: 4px; }#tab-product .banner.warn{ border: 1px solid var(--warn); background: var(--warn-soft); }#tab-product .banner.bad{ border: 1px solid var(--bad); background: var(--bad-soft); }#tab-product .login-box{ max-width: 380px; margin: 48px auto; }#tab-product .login-box h1{ font-size: 22px; }#tab-product .form-row{ margin-bottom: 10px; }#tab-product .form-row label{ display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }#tab-product .form-row input{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      background: var(--paper);
+    }#tab-product .overlay{
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(29, 36, 48, 0.35);
+      align-items: center;
+      justify-content: center;
+      z-index: 5;
+    }#tab-product .overlay.show{ display: flex; }#tab-product .modal{
+      width: min(440px, 92%);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }#tab-product .modal h2{ margin: 0 0 6px; font-size: 16px; }#tab-product .modal p{ margin: 0 0 12px; font-size: 13px; color: var(--muted); }#tab-product .steps{
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: var(--muted);
+    }#tab-product .steps b{ color: var(--accent); }#tab-product .dl{ display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; font-size: 13px; }#tab-product .dl dt{ color: var(--muted); }#tab-product .dl dd{ margin: 0; }#tab-product table{
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+      margin-top: 8px;
+    }#tab-product th, #tab-product td{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }#tab-product th{ background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }#tab-product tr:last-child td{ border-bottom: 0; }#tab-product .site-actions{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }#tab-product .note{
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 20px;
+    }#tab-product .note strong{ display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <aside class="rail">
+    <div class="brand">
+      <small>docs 汇总 · 单文件</small>
+      <strong>客户端设计</strong>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" aria-selected="true" data-tab="task">
+        <em>01</em>
+        <b>任务闭环</b>
+        <small>WorkflowConfig → 回传</small>
+      </button>
+      <button type="button" role="tab" aria-selected="false" data-tab="account">
+        <em>02</em>
+        <b>账号与执行端</b>
+        <small>只打给装了扩展的第一台</small>
+      </button>
+      <button type="button" role="tab" aria-selected="false" data-tab="hotel">
+        <em>03</em>
+        <b>酒店绑定</b>
+        <small>安装时绑 ID，跑任务只核对</small>
+      </button>
+      <button type="button" role="tab" aria-selected="false" data-tab="product">
+        <em>04</em>
+        <b>客户端界面</b>
+        <small>登录、向导、报表稿</small>
+      </button>
+    </nav>
+  </aside>
+  <main class="doc-stage">
+  <section class="tab-panel active" id="tab-task" data-tab="task" role="tabpanel">
+  <div class="wrap">
+    <div class="kicker">workflow-task · 客户端核心闭环</div>
+    <h1>服务端下发 WorkflowConfig，客户端回传 outputSchema 结果</h1>
+    <p class="lede">
+      用户不点运行。后端按账号推送完整配置，本机走固定流程：校验 → Chrome 扩展执行 workflow → Agent 按 instruction 汇总 → 回传对齐 outputSchema 的 JSON。
+      执行日志另传 OSS，地址写在回包的 <code>clientLogOssUrl</code>。下面以「携程 EBK 评论回复」为例。
+    </p>
+
+    <div class="chain">
+      <article>
+        <div class="n">01 后端</div>
+        <h3>下发 WorkflowConfig</h3>
+        <p>workflow + instruction + outputSchema。metrics 键在此时定死。</p>
+      </article>
+      <article>
+        <div class="n">02 校验</div>
+        <h3>三件套齐全才跑</h3>
+        <p>缺字段就停，不臆造格式。</p>
+      </article>
+      <article>
+        <div class="n">03 扩展</div>
+        <h3>只跑 workflow</h3>
+        <p>打开 EBK、听包、点回复。不管怎么汇总。</p>
+      </article>
+      <article>
+        <div class="n">04 Agent</div>
+        <h3>按 instruction 处理</h3>
+        <p>只填 outputSchema.metrics 已有的键。</p>
+      </article>
+      <article>
+        <div class="n">05 定稿</div>
+        <h3>对齐 outputSchema</h3>
+        <p>成功、失败、需要登录都用同一骨架。</p>
+      </article>
+      <article class="back">
+        <div class="n">06 回传</div>
+        <h3>JSON + 日志地址</h3>
+        <p>结果入库做报表；clientLogOssUrl 留给排障。</p>
+      </article>
+    </div>
+
+    <h2>一份配置，三种角色</h2>
+    <div class="three">
+      <div class="card">
+        <span class="who ext">Chrome 扩展</span>
+        <h3>workflow / maxRetry</h3>
+        <p>去哪个页、点哪个按钮、听哪条接口。instruction 不进扩展。</p>
+      </div>
+      <div class="card">
+        <span class="who agent">本机 Agent</span>
+        <h3>instruction</h3>
+        <p>自然语言：回复待回复评论，再按 metrics 模板统计。不加戏、不增字段。</p>
+      </div>
+      <div class="card">
+        <span class="who agent">回传后端</span>
+        <h3>outputSchema</h3>
+        <p>最终 JSON 合同。信封（时间、成败、日志）+ 下发时定死的 metrics。</p>
+      </div>
+    </div>
+
+    <h2>场景：携程 EBK 评论回复</h2>
+    <p class="lede" style="margin-bottom:12px">
+      后端下发完整配置，不是让客户端自己想。metrics 有哪些键，写在下发的 <code>outputSchema.metrics</code> 里；客户端只按样填值。
+    </p>
+    <div class="split">
+      <div class="card">
+        <h3>后端下发的 WorkflowConfig</h3>
+        <pre id="wf-configJson"></pre>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:10px">
+          <h3>成功时回传</h3>
+          <pre id="wf-okJson"></pre>
+        </div>
+        <div class="card">
+          <h3>登录失效时回传（同一骨架）</h3>
+          <p style="margin-bottom:8px">抓取失败不编造业务数字。信封填 <code>LOGIN_REQUIRED</code>，metrics 各键为 0。</p>
+          <pre id="wf-loginJson"></pre>
+        </div>
+      </div>
+    </div>
+
+    <h2>本机执行顺序</h2>
+    <p class="lede" style="margin-bottom:12px">点左侧步骤。右侧可切换「抓取成功」和「需要登录」。</p>
+    <div class="split">
+      <div class="steps" id="wf-steps"></div>
+      <div>
+        <div class="btns">
+          <button type="button" class="btn primary" id="wf-btnOk">路径：抓取成功</button>
+          <button type="button" class="btn" id="wf-btnLogin">路径：需要登录</button>
+        </div>
+        <div class="panel" id="wf-detail"></div>
+      </div>
+    </div>
+
+    <h2>后端收什么</h2>
+    <p class="lede" style="margin-bottom:12px">
+      后端只收对齐 outputSchema 的 JSON。业务报表用信封 + metrics；排障用 <code>clientLogOssUrl</code>。
+      原始抓取数据和 workflow 细节留在客户端，不上报。
+      失败（含需要登录）也要传日志，否则最难查的情况没有现场。
+    </p>
+    <table>
+      <thead>
+        <tr><th>交给后端</th><th>不上报</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>outputSchema 结果（含 metrics、errorCode、时间、日志地址）</td>
+          <td>Chrome 采集到的原始 payload / Cookie / 评论原文</td>
+        </tr>
+        <tr>
+          <td>执行日志（OSS）里的进度与错误摘要</td>
+          <td>商家密码、验证码；WorkflowConfig 全文（后端自己有）</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="lede">OSS 上传失败时：业务 JSON 照交，<code>clientLogOssUrl</code> 为 null，可带 <code>logUploadError</code>。</p>
+
+    <h2>回传字段：公共信封 + 下发时定死的 metrics</h2>
+    <p class="lede" style="margin-bottom:12px">
+      <strong>metrics 的字段名由任务下发时的 outputSchema.metrics 定死。</strong>
+      客户端只填值，不准增删键。后端用自己保存的 schema 解析。
+      信封（时间、成败、日志地址）是客户端协议固定槽，建议写在同一份 outputSchema 模板里。
+    </p>
+    <table>
+      <thead>
+        <tr><th>字段</th><th>含义</th><th>谁定 / 谁填</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>taskId</code></td><td>后端业务任务 ID</td><td>下发时带上，原样带回</td></tr>
+        <tr><td><code>platform</code> / <code>platformLabel</code></td><td>枚举如 ctrip / meituan / douyin；展示名如「携程EBK」</td><td>下发时带上</td></tr>
+        <tr><td><code>taskType</code></td><td>如 review_reply、order_summary</td><td>下发时带上</td></tr>
+        <tr><td><code>ok</code> / <code>needsLogin</code></td><td>是否跑完；是否因登录态失效而停</td><td>客户端填</td></tr>
+        <tr><td><code>errorCode</code> / <code>error</code></td><td>机器可判的失败码；给人看的原因。成功为 null</td><td>客户端填</td></tr>
+        <tr><td><code>startedAt</code> / <code>finishedAt</code> / <code>durationMs</code></td><td>开始、结束、耗时</td><td>客户端填</td></tr>
+        <tr><td><code>clientVersion</code></td><td>客户端版本</td><td>客户端填</td></tr>
+        <tr><td><code>clientLogOssUrl</code></td><td>执行日志 OSS 地址</td><td>客户端填；上传失败为 null</td></tr>
+        <tr><td><code>metrics.*</code></td><td>本任务业务结果</td><td>键由下发 schema 定死；客户端填值，失败则 0 / null / []</td></tr>
+      </tbody>
+    </table>
+
+    <h2>errorCode</h2>
+    <table>
+      <thead>
+        <tr><th>码</th><th>含义</th><th>客户端侧</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>LOGIN_REQUIRED</code></td><td>商家后台未登录或会话过期</td><td>引导去 Chrome 登录；metrics 全 0</td></tr>
+        <tr><td><code>EXTENSION_DISCONNECTED</code></td><td>扩展未连接</td><td>提示打开 Chrome 并加载扩展</td></tr>
+        <tr><td><code>CRAWL_FAILED</code></td><td>workflow 执行失败</td><td>看 OSS 日志，不编数据</td></tr>
+        <tr><td><code>AGENT_FAILED</code></td><td>抓取成功但汇总失败</td><td>看 Agent 日志</td></tr>
+        <tr><td><code>CANCELLED</code></td><td>用户停止或后端取消</td><td>不重试除非再下发</td></tr>
+        <tr><td><code>CONFIG_INVALID</code></td><td>下发配置不完整</td><td>后端修配置</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>约定</strong>
+      扩展只执行 workflow。instruction / outputSchema 只在顶层，不当步骤字段。
+      抓取失败立刻停，不编造 metrics。成功才按 instruction 填下发模板里的键。
+      无论成败，先上传执行日志，再把 clientLogOssUrl 写进回包。日志不含 Cookie 和接口原文。
+    </div>
+  </div>
+
+  </section>
+  <section class="tab-panel" id="tab-account" data-tab="account" role="tabpanel">
+  <div class="wrap">
+    <div class="kicker">账号系统 · 多端登录与任务投递</div>
+    <h1>只给装了扩展的客户端下发任务</h1>
+    <p class="lede">
+      看数据：只装客户端。跑任务：客户端 + Chrome 扩展。
+      后端不按账号广播，只看「这个账号下哪些设备扩展在线」。0 台 → 提示安装；1 台 → 打给它；≥2 台 → 取第一台，用户不用选。
+    </p>
+
+    <div class="chain">
+      <article>
+        <div class="n">01</div>
+        <h3>产品账号</h3>
+        <p>身份、报表。N 台同时登录，互不踢下线。</p>
+      </article>
+      <article>
+        <div class="n">02</div>
+        <h3>只装客户端</h3>
+        <p>没有扩展 = 只读。根本不进任务候选。</p>
+      </article>
+      <article>
+        <div class="n">03</div>
+        <h3>客户端 + 扩展</h3>
+        <p>心跳上报 extensionConnected。这才是执行端。</p>
+      </article>
+      <article>
+        <div class="n">04</div>
+        <h3>0 / 1 / N</h3>
+        <p>0 提示；1 直接投；多台取 extensionBoundAt 最早的那台。</p>
+      </article>
+    </div>
+
+    <h2>角色怎么出现</h2>
+    <div class="three">
+      <div class="card">
+        <span class="who ok">只看数据</span>
+        <h3>不装扩展</h3>
+        <p>笔记本登录产品账号看报表即可。没有扩展，后端不会把任务打过来。</p>
+      </div>
+      <div class="card">
+        <span class="who ok">跑任务</span>
+        <h3>装扩展</h3>
+        <p>办公室那台装客户端和扩展。商家后台仍在这台 Chrome 里登录。</p>
+      </div>
+      <div class="card">
+        <span class="who warn">两台都装了</span>
+        <h3>取第一台</h3>
+        <p>不弹窗。按首次绑定扩展的时间排序，永远打给最早那台（且当前在线）。</p>
+      </div>
+    </div>
+
+    <h2>投递规则</h2>
+    <table>
+      <thead>
+        <tr><th>该账号下，扩展当前在线的设备数</th><th>行为</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>0</td>
+          <td>任务保持 <code>WAITING_EXTENSION</code>。所有已登录的客户端提示：「请在一台电脑上安装并打开浏览器扩展」。不让用户挑机器。</td>
+        </tr>
+        <tr>
+          <td>1</td>
+          <td>任务只推到这台。另一台没装扩展，收不到。</td>
+        </tr>
+        <tr>
+          <td>≥2</td>
+          <td>按 <code>extensionBoundAt ASC</code> 取第一台，只 push 给它。其余有扩展的设备也不跑这一单。</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="lede" style="margin-top:12px">
+      「第一台」= 这个账号下第一次上报扩展在线的设备，时间写下 <code>extensionBoundAt</code>，之后不再改。
+      投递时再滤掉当前不在线的；在线集合里仍然按这个时间取最早。不要用心跳新旧、商家 Cookie、打分。
+    </p>
+
+    <h2>两套通道</h2>
+    <table>
+      <thead>
+        <tr><th></th><th>只装客户端</th><th>客户端 + 扩展</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>能做什么</td>
+          <td>登录、报表、账户</td>
+          <td>上面全部 + 收任务、跑 workflow</td>
+        </tr>
+        <tr>
+          <td>通道</td>
+          <td>REST</td>
+          <td>REST + <code>device:{id}</code> 任务通道</td>
+        </tr>
+        <tr>
+          <td>心跳</td>
+          <td>可选，只表示客户端在线</td>
+          <td>必须带 <code>extensionConnected: true</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>数据模型</h2>
+    <div class="split">
+      <div class="card">
+        <h3>核心字段</h3>
+        <pre id="acc-schema"></pre>
+      </div>
+      <div class="card">
+        <h3>心跳（有扩展的设备）</h3>
+        <pre id="acc-heartbeat"></pre>
+      </div>
+    </div>
+
+    <h2>三种现场</h2>
+    <div class="btns">
+      <button type="button" class="btn primary" id="acc-btnA">一跑一看</button>
+      <button type="button" class="btn" id="acc-btnB">两台都装了扩展</button>
+      <button type="button" class="btn" id="acc-btnC">都没装扩展</button>
+    </div>
+    <div class="devices" id="acc-devices"></div>
+    <div class="panel" id="acc-detail"></div>
+
+    <h2>实现上只需卡住这几件事</h2>
+    <table>
+      <thead>
+        <tr><th>点</th><th>做法</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>不要按账号广播</td>
+          <td>任务 push 到选中的 <code>deviceId</code>。没扩展的客户端连这条通道都没有。</td>
+        </tr>
+        <tr>
+          <td>taskId 单飞</td>
+          <td><code>Task.assigneeDeviceId</code> 写下第一台。回传带 deviceId；重复上报丢弃。防止两台扩展同时在线时的竞态。</td>
+        </tr>
+        <tr>
+          <td>第一台离线</td>
+          <td>它不在「当前扩展在线」集合里。若还剩别的扩展在线，取集合里 boundAt 最早的（可能变成原来的第二台）。若一个都不在线 → 走 0 台提示。</td>
+        </tr>
+        <tr>
+          <td>卸扩展 / 重装客户端</td>
+          <td>扩展断开则该设备离开候选。重装客户端会得到新 deviceId，<code>extensionBoundAt</code> 是新的，排序上变成「更晚的一台」。</td>
+        </tr>
+        <tr>
+          <td>商家没登录</td>
+          <td>跟调度无关。任务已经打到第一台，由那台回 <code>LOGIN_REQUIRED</code>，引导在这台 Chrome 登录。不要因为 Cookie 再换一台。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>约定</strong>
+      不跑任务 = 不装扩展。调度只认扩展在线列表：0 提示，1 投它，多台投第一台（<code>extensionBoundAt</code> 最早）。
+      用户不选执行端。商家登录仍在被选中的那台 Chrome 里完成。
+    </div>
+  </div>
+
+  </section>
+  <section class="tab-panel" id="tab-hotel" data-tab="hotel" role="tabpanel">
+  <div class="wrap">
+    <div class="kicker">酒店上下文 · 绑定 + 运行时核对</div>
+    <h1>平台酒店 ID 安装时绑一次，之后任务按这份下发</h1>
+    <p class="lede">
+      后端一开始不知道携程/美团的酒店 ID。这个 ID 只存在商家后台的登录态里。
+      所以安装向导里要有「绑定酒店」：点按钮，扩展去当前 Chrome 读出平台酒店 ID，<strong>客户端保存并同步后端</strong>。没绑定就不下发该平台任务。
+      绑定不是每次跑任务再选一次店；跑的时候只拿这份 ID 和当前页面核对，防串店。
+    </p>
+
+    <h2>安装时：绑定平台酒店</h2>
+    <div class="chain">
+      <article>
+        <div class="n">01</div>
+        <h3>装客户端 + 扩展</h3>
+        <p>只装客户端看报表；要跑任务才装扩展。绑定按钮依赖扩展。</p>
+      </article>
+      <article>
+        <div class="n">02</div>
+        <h3>Chrome 登录商家后台</h3>
+        <p>和平时一样。先把顶栏切到「就是要抓的那家店」，再点绑定。</p>
+      </article>
+      <article>
+        <div class="n">03</div>
+        <h3>点「绑定酒店」</h3>
+        <p>扩展读当前店（同一套「我是谁」探测）。弹出店名 + platformHotelId，确认后写入。</p>
+      </article>
+      <article>
+        <div class="n">04</div>
+        <h3>本地保存 + 上报后端</h3>
+        <p>只存在客户端，后端第一次下发仍然没有 ID。两边都有了才允许投任务。</p>
+      </article>
+    </div>
+
+    <div class="split" style="margin-bottom:28px">
+      <div class="card">
+        <h3>绑定成功后写入的记录</h3>
+        <pre id="htl-bindJson"></pre>
+      </div>
+      <div class="card">
+        <h3>按钮在做什么</h3>
+        <p style="margin-bottom:10px">不是让用户手填 ID，也不是酒店下拉。读的就是现在 Chrome 里开着的那家。</p>
+        <p>确认文案必须带店名和平台 ID，避免同名店绑错。绑错了再切顶栏、再点一次覆盖。一个平台可以绑多家：切到下一家再绑，后端按 platformHotelId 存多条。</p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>状态</th><th>后端</th><th>客户端</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>该平台一条绑定都没有</td>
+          <td>不下发该平台任务</td>
+          <td>安装未完成 / 商家连接页提示去绑定。和「没装扩展」同一类门闩。</td>
+        </tr>
+        <tr>
+          <td>已绑定</td>
+          <td>任务 <code>targetHotel.platformHotelId</code> 用这份</td>
+          <td>本地缓存同值，开跑前和当前 Chrome 比对。</td>
+        </tr>
+        <tr>
+          <td>重装客户端</td>
+          <td>绑定还在账号下</td>
+          <td>登录后拉下来，不必再绑。除非用户要改店。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>跑任务时：只核对，不再选店</h2>
+    <div class="chain">
+      <article>
+        <div class="n">01 下发</div>
+        <h3>targetHotel 写进配置</h3>
+        <p>用绑定得到的 platformHotelId。客户端不准另猜一家。</p>
+      </article>
+      <article>
+        <div class="n">02 开跑前</div>
+        <h3>读出当前店，比对</h3>
+        <p>从页面或「我是谁」接口拿 currentHotelId。不等指令去「感觉」。</p>
+      </article>
+      <article>
+        <div class="n">03 不一致</div>
+        <h3>停，不采、不写</h3>
+        <p>回 <code>HOTEL_MISMATCH</code>。metrics 全 0。提示去商家后台切到目标店。</p>
+      </article>
+      <article>
+        <div class="n">04 跑的过程中</div>
+        <h3>每条包校验酒店 ID</h3>
+        <p>用户中途切店 → <code>HOTEL_SWITCHED</code>，已采数据丢弃，不当成功回传。</p>
+      </article>
+    </div>
+
+    <h2>不要做的三件事</h2>
+    <div class="three">
+      <div class="card">
+        <span class="who bad">反模式</span>
+        <h3>信当前页面</h3>
+        <p>打开评论页就开始听包。当前是哪家店完全取决于用户上次点了什么。</p>
+      </div>
+      <div class="card">
+        <span class="who bad">反模式</span>
+        <h3>每次任务再选酒店</h3>
+        <p>和已绑定、已下发的 ID 容易选叉。选店只发生在安装绑定；任务里没有酒店下拉。</p>
+      </div>
+      <div class="card">
+        <span class="who warn">默认不要</span>
+        <h3>静默帮用户切店</h3>
+        <p>EBK 的当前酒店通常是整段登录态，不是单个标签。采集窗口里一切，用户正在看的页面也会变。</p>
+      </div>
+    </div>
+
+    <h2>配置里必须有目标酒店</h2>
+    <div class="split">
+      <div class="card">
+        <h3>WorkflowConfig 增加的字段</h3>
+        <pre id="htl-configJson"></pre>
+      </div>
+      <div class="card">
+        <h3>错店时回传（同一骨架）</h3>
+        <pre id="htl-mismatchJson"></pre>
+      </div>
+    </div>
+    <p class="lede" style="margin-top:12px">
+      <code>platformHotelId</code> 来自绑定，不是运营手填。必须是商家后台那个 ID。我们库里的 <code>hotelId</code> 可以后补关联，但不能代替平台 ID——扩展在页面里对得上的只有平台 ID。
+    </p>
+
+    <h2>当前酒店从哪读</h2>
+    <table>
+      <thead>
+        <tr><th>来源</th><th>用途</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>开跑前：平台「当前酒店」接口或顶栏 DOM</td>
+          <td>决定能不能开始。读不到等同于上下文不明，停，不要当匹配。</td>
+        </tr>
+        <tr>
+          <td>采集到的每个请求/响应里的酒店字段</td>
+          <td>决定这条数据能不能进本单。缺字段的包：能从会话上下文推断则用开跑时的 ID，推断不了就丢这条。</td>
+        </tr>
+        <tr>
+          <td>酒店切换接口 / 顶栏点击</td>
+          <td>跑的过程中一旦出现，立即 abort，不要等这一步 workflow 跑完。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>三种现场</h2>
+    <div class="btns">
+      <button type="button" class="btn primary" id="htl-btnA">开跑就是错店</button>
+      <button type="button" class="btn" id="htl-btnB">跑到一半切店</button>
+      <button type="button" class="btn" id="htl-btnC">店对得上</button>
+    </div>
+    <div class="panel" id="htl-detail"></div>
+
+    <h2>errorCode</h2>
+    <table>
+      <thead>
+        <tr><th>码</th><th>何时</th><th>客户端</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>HOTEL_UNBOUND</code></td>
+          <td>该平台还没有绑定记录（或任务里缺 platformHotelId）</td>
+          <td>不下发；已在客户端则提示去点「绑定酒店」。不是跑起来再猜。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_MISMATCH</code></td>
+          <td>开跑前 current ≠ 已绑定/已下发的 target</td>
+          <td>不采。提示：当前是「A」，本单要「B」，请在商家后台切换。不要让用户在客户端改绑定来「迁就」当前页，除非他确认绑错了要重绑。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_SWITCHED</code></td>
+          <td>已经开始后 current 变了，或某条采集的酒店 ID 对不上</td>
+          <td>丢弃本单已采数据。不把 A+B 混成一份 metrics。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_NOT_ACCESSIBLE</code></td>
+          <td>这套商家登录里根本没有目标酒店（读酒店列表对不上）</td>
+          <td>不是切一下能解决。提示换有权限的账号在 Chrome 登录。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_UNKNOWN</code></td>
+          <td>登录着，但读不出当前酒店 ID</td>
+          <td>当失败，不要降级成「先抓了再说」。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>和登录提示同一类交互</h2>
+    <p class="lede" style="margin-bottom:12px">
+      绑定、登录、切店都是「去 Chrome 做一件商家后台里本来就会的事」。
+      客户端只有两个按钮级动作：<code>绑定酒店</code>（安装/改绑）和登录失效时的「去浏览器登录」。任务执行过程中没有酒店下拉。
+    </p>
+    <table>
+      <thead>
+        <tr><th>登录失效</th><th>酒店不对</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>扩展发现跳到登录页 / 401</td>
+          <td>扩展发现 currentHotelId ≠ targetHotel.platformHotelId</td>
+        </tr>
+        <tr>
+          <td>提示去 Chrome 完成登录</td>
+          <td>提示去 Chrome 切到「XX酒店」（带平台 ID，避免同名店）</td>
+        </tr>
+        <tr>
+          <td>回 <code>LOGIN_REQUIRED</code>，metrics 为 0</td>
+          <td>回 <code>HOTEL_MISMATCH</code>，metrics 为 0</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="warn-box">
+      <strong>为什么默认不自动切店</strong>
+      采集可以开独立窗口，但商家后台的「当前酒店」多半写在 Cookie / 全局 header 里，一切就是整次会话都切。
+      用户正在看 A 店订单，任务要 B 店，静默切换等于抢走他的工作台。
+      若某平台列表接口可以在 body 里带 <code>hotelId</code>、不依赖顶栏当前店，优先走 <code>call_api</code> 带目标 ID，根本不用动 UI。这是平台适配，不是账号协议。
+    </div>
+
+    <h2>Agent 侧</h2>
+    <table>
+      <thead>
+        <tr><th>点</th><th>规则</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>开跑前失败</td>
+          <td>和抓取失败一样：不跑 instruction，不编 metrics。</td>
+        </tr>
+        <tr>
+          <td>采集结果里混了别的店</td>
+          <td>扩展应在听包阶段就丢掉或直接 abort。Agent 不得「尽量汇总还能用的」。</td>
+        </tr>
+        <tr>
+          <td>回传信封</td>
+          <td>带上 <code>targetHotel</code> 与 <code>actualHotelId</code>（读到的当前店），方便后端对账，不进业务报表数字。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>约定</strong>
+      平台酒店 ID 靠安装时「绑定酒店」从 Chrome 读出，写入客户端并同步后端；未绑定不下发。
+      之后任务带这份 ID。扩展开跑前、采集中核对，对不上就停。绑是一次性身份，选店不进任务界面。
+    </div>
+  </div>
+
+  </section>
+  <section class="tab-panel" id="tab-product" data-tab="product" role="tabpanel">
+  <div class="wrap">
+    <div class="kicker">客户端产品设计 · 对齐 docs 已定协议</div>
+    <h1>用户只管登录、连商家、看报表。任务后台自己跑。</h1>
+    <p class="lede">
+      没有「运行任务」按钮。多端登录不互踢；没装扩展的电脑只看数据。
+      商家账密不进客户端。安装时绑定平台酒店，之后只核对、不再选店。
+    </p>
+
+    <div class="principles">
+      <article>
+        <h3>账号</h3>
+        <p>产品登录可多开。任务只打给当前扩展在线的第一台。</p>
+      </article>
+      <article>
+        <h3>执行端</h3>
+        <p>不装扩展 = 只读。0 台提示；≥2 台取绑定扩展最早的那台。</p>
+      </article>
+      <article>
+        <h3>酒店</h3>
+        <p>安装时「绑定酒店」从 Chrome 读 ID，同步后端。错店停，不静默切。</p>
+      </article>
+      <article>
+        <h3>执行</h3>
+        <p>API 优先。评论回复：分页 → bot 生成 → 页内提交 → 入库。用户看不见 workflow。</p>
+      </article>
+    </div>
+
+    <h2>场景（点一下切界面状态）</h2>
+    <div class="scenes">
+      <button type="button" class="btn primary" data-scene="login">未登录</button>
+      <button type="button" class="btn" data-scene="onboard">首次安装</button>
+      <button type="button" class="btn" data-scene="ready">执行端就绪</button>
+      <button type="button" class="btn" data-scene="viewer">只看报表</button>
+      <button type="button" class="btn" data-scene="noext">未装扩展</button>
+      <button type="button" class="btn" data-scene="loginreq">商家要登录</button>
+      <button type="button" class="btn" data-scene="mismatch">当前不是目标店</button>
+      <button type="button" class="btn" data-scene="running">后台回复评论中</button>
+    </div>
+
+    <div class="app-chrome" id="prd-app">
+      <div class="titlebar">
+        <div class="left">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          门店客户端
+        </div>
+        <span class="jobchip idle" id="prd-jobchip">未登录</span>
+      </div>
+
+      <div id="prd-view-login" class="view active">
+        <div class="login-box">
+          <h1>登录</h1>
+          <p class="hint">产品账号。用来拉报表和下发任务，不是携程 / 美团账号。</p>
+          <div class="form-row">
+            <label>手机号</label>
+            <input value="13800138000" />
+          </div>
+          <div class="form-row">
+            <label>验证码</label>
+            <input value="248163" />
+          </div>
+          <button type="button" class="btn primary" id="prd-btnLogin">进入</button>
+        </div>
+      </div>
+
+      <div id="prd-view-onboard" class="view">
+        <div class="login-box" style="max-width:460px">
+          <div class="steps" id="prd-onboardSteps"></div>
+          <div id="prd-onboardBody"></div>
+        </div>
+      </div>
+
+      <div id="prd-view-app" class="view">
+        <div class="app-body">
+          <aside class="nav">
+            <div class="product">
+              <small>杭州西湖店</small>
+              <b>门店客户端</b>
+            </div>
+            <button type="button" class="item" data-view="reports" aria-current="page">报表</button>
+            <button type="button" class="item" data-view="sites">商家连接</button>
+            <button type="button" class="item" data-view="account">账户</button>
+            <div class="spacer"></div>
+            <div class="ext on" id="prd-extBadge">扩展已连接</div>
+          </aside>
+          <main class="stage">
+            <div class="banner warn" id="prd-banner"></div>
+
+            <section id="prd-view-reports" class="view active">
+              <div class="row">
+                <div>
+                  <h1>报表</h1>
+                  <p>后端下发、本机执行后回传的结果。没有手动运行。</p>
+                </div>
+              </div>
+              <div class="kpis">
+                <div class="kpi"><span>今日已回复</span><strong id="prd-kpiReply">12</strong></div>
+                <div class="kpi"><span>好评 / 差评</span><strong id="prd-kpiScore">9 / 3</strong></div>
+                <div class="kpi"><span>待执行任务</span><strong id="prd-kpiWait">0</strong></div>
+              </div>
+              <article class="card">
+                <h3>携程评论回复 <span class="pill ok" id="prd-rep1pill">今天 14:02 完成</span></h3>
+                <p id="prd-rep1">T-10421 · 回复 12 · 好评 9 · 差评 3 · 跳过 4</p>
+              </article>
+              <article class="card">
+                <h3>美团订单汇总 <span class="pill ok">今天 11:18 完成</span></h3>
+                <p>T-10408 · 128 笔 · ¥186,420</p>
+              </article>
+              <article class="card" id="prd-repFail">
+                <h3>携程评论回复 <span class="pill bad">失败</span></h3>
+                <p>LOGIN_REQUIRED · 未回复。数字为 0，不编造。</p>
+              </article>
+            </section>
+
+            <section id="prd-view-sites" class="view">
+              <div class="row">
+                <div>
+                  <h1>商家连接</h1>
+                  <p>不收商家密码。Chrome 登录 + 绑定酒店。没有酒店下拉给每单选店。</p>
+                </div>
+              </div>
+              <article class="card">
+                <h3>携程 EBK</h3>
+                <p class="hint" id="prd-ctripHint">
+                  <span class="pill ok">扩展在线</span>
+                  <span class="pill ok">Chrome 已登录</span>
+                  <span class="pill ok">已绑定 杭州西湖店 · 1678321</span>
+                </p>
+                <div class="site-actions">
+                  <button type="button" class="btn" id="prd-btnOpenCtrip">在浏览器打开</button>
+                  <button type="button" class="btn" id="prd-btnBindCtrip">重新绑定酒店</button>
+                </div>
+              </article>
+              <article class="card">
+                <h3>美团</h3>
+                <p class="hint">
+                  <span class="pill warn">未绑定</span>
+                  该平台任务不会下发，直到绑定成功。
+                </p>
+                <div class="site-actions">
+                  <button type="button" class="btn primary" id="prd-btnBindMeituan">绑定酒店</button>
+                </div>
+              </article>
+            </section>
+
+            <section id="prd-view-account" class="view">
+              <div class="row">
+                <div>
+                  <h1>账户</h1>
+                  <p>产品身份。本机是否执行端由「有没有扩展」决定，没有开关。</p>
+                </div>
+                <button type="button" class="btn" id="prd-btnLogout">退出</button>
+              </div>
+              <dl class="dl">
+                <dt>姓名</dt><dd>王敏</dd>
+                <dt>手机</dt><dd>13800138000</dd>
+                <dt>组织</dt><dd>杭州西湖店</dd>
+                <dt>本机角色</dt><dd id="prd-roleDd">执行端 · 扩展首次绑定 2026-03-01</dd>
+                <dt>商家密码</dt><dd>不保存 · 登录态在 Chrome</dd>
+              </dl>
+            </section>
+          </main>
+        </div>
+      </div>
+
+      <div class="overlay" id="prd-modal" role="dialog">
+        <div class="modal">
+          <h2 id="prd-modalTitle"></h2>
+          <p id="prd-modalBody"></p>
+          <button type="button" class="btn primary" id="prd-modalOk">确定</button>
+          <button type="button" class="btn" id="prd-modalCancel" style="margin-left:8px">稍后</button>
+        </div>
+      </div>
+    </div>
+
+    <h2>界面里有什么、没有什么</h2>
+    <table>
+      <thead>
+        <tr><th>有</th><th>没有</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>登录、报表、商家连接、账户</td>
+          <td>运行任务、任务目录、Prompt、workflow JSON</td>
+        </tr>
+        <tr>
+          <td>安装向导：装扩展（可跳过）→ 绑定酒店</td>
+          <td>「设为执行端」开关；每单再选一次酒店</td>
+        </tr>
+        <tr>
+          <td>去浏览器登录 / 切换到指定店 / 去装扩展</td>
+          <td>商家账密表单、验证码格子、静默切店</td>
+        </tr>
+        <tr>
+          <td>顶栏：空闲 / 执行中 / 请处理（登录、错店、无扩展）</td>
+          <td>把 Cookie、config 文件名展示给用户</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>和协议的对应</strong>
+      报表数字来自回传 outputSchema.metrics。商家连接页的绑定写入 platformHotelId 并同步后端。
+      未装扩展的客户端只有 REST，收不到任务。错店、登录失效暂停当前单，metrics 为 0。
+    </div>
+  </div>
+
+  </section>
+  </main>
+  <script>
+    function showTab(id) {
+      document.querySelectorAll(".tabs button").forEach((b) => {
+        b.setAttribute("aria-selected", String(b.dataset.tab === id));
+      });
+      document.querySelectorAll(".tab-panel").forEach((p) => {
+        p.classList.toggle("active", p.dataset.tab === id);
+      });
+      if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+    }
+    document.querySelectorAll(".tabs button").forEach((b) => {
+      b.addEventListener("click", () => showTab(b.dataset.tab));
+    });
+    const first = (location.hash || "#task").slice(1);
+    if (["task", "account", "hotel", "product"].includes(first)) showTab(first);
+
+(function () {
+
+    const CONFIG = {
+      taskId: "T-10421",
+      platform: "ctrip",
+      platformLabel: "携程EBK",
+      taskType: "review_reply",
+      maxRetry: 1,
+      instruction: "对待回复的携程 EBK 评论按规则回复；按 outputSchema.metrics 统计 repliedCount / goodCount / badCount / skippedCount。缺值填 0。若跳到登录则 needsLogin=true，metrics 全 0，不要增删字段。",
+      outputSchema: {
+        taskId: "T-10421",
+        crawlTaskId: "",
+        platform: "ctrip",
+        platformLabel: "携程EBK",
+        taskType: "review_reply",
+        ok: true,
+        needsLogin: false,
+        errorCode: null,
+        error: null,
+        startedAt: "ISO-8601",
+        finishedAt: "ISO-8601",
+        durationMs: 0,
+        clientVersion: "",
+        clientLogOssUrl: null,
+        logUploadError: null,
+        metrics: {
+          repliedCount: 0,
+          goodCount: 0,
+          badCount: 0,
+          skippedCount: 0
+        }
+      },
+      workflow: [
+        { type: "navigate", url: "https://ebooking.ctrip.com/comment/commentList", event: "comments", need_collect: true, reg_exp: "getComment" },
+        { type: "click", selector: "button.reply", event: "open_editor" },
+        { type: "input", selector: "textarea", value: "{{replyText}}", event: "fill_reply" },
+        { type: "click", selector: "button.submit", event: "submit", need_collect: true, reg_exp: "setCommentReply" }
+      ]
+    };
+
+    const OK = {
+      taskId: "T-10421",
+      crawlTaskId: "a1b2c3d4",
+      platform: "ctrip",
+      platformLabel: "携程EBK",
+      taskType: "review_reply",
+      ok: true,
+      needsLogin: false,
+      errorCode: null,
+      error: null,
+      startedAt: "2026-09-18T14:00:03+08:00",
+      finishedAt: "2026-09-18T14:02:11+08:00",
+      durationMs: 128000,
+      clientVersion: "0.1.3",
+      clientLogOssUrl: "https://oss.example.com/agent-logs/20260918/a1b2c3d4.json",
+      logUploadError: null,
+      metrics: {
+        repliedCount: 12,
+        goodCount: 9,
+        badCount: 3,
+        skippedCount: 4
+      }
+    };
+
+    const NEED_LOGIN = {
+      taskId: "T-10421",
+      crawlTaskId: "a1b2c3d4",
+      platform: "ctrip",
+      platformLabel: "携程EBK",
+      taskType: "review_reply",
+      ok: false,
+      needsLogin: true,
+      errorCode: "LOGIN_REQUIRED",
+      error: "商家后台登录已失效，已停止。未回复任何评论。",
+      startedAt: "2026-09-18T14:00:03+08:00",
+      finishedAt: "2026-09-18T14:00:18+08:00",
+      durationMs: 15000,
+      clientVersion: "0.1.3",
+      clientLogOssUrl: "https://oss.example.com/agent-logs/20260918/a1b2c3d4.json",
+      logUploadError: null,
+      metrics: {
+        repliedCount: 0,
+        goodCount: 0,
+        badCount: 0,
+        skippedCount: 0
+      }
+    };
+
+    document.getElementById("wf-configJson").textContent = JSON.stringify(CONFIG, null, 2);
+    document.getElementById("wf-okJson").textContent = JSON.stringify(OK, null, 2);
+    document.getElementById("wf-loginJson").textContent = JSON.stringify(NEED_LOGIN, null, 2);
+
+    const STEPS = [
+      {
+        title: "校验配置",
+        brief: "workflow、instruction、outputSchema 缺一不可。",
+        ok: "下发的评论回复配置三件套齐全，开始跑。",
+        login: "配置本身齐全。需要登录是抓取阶段才发现的。"
+      },
+      {
+        title: "扩展执行 workflow",
+        brief: "打开评论页、听包、点回复。",
+        ok: "Chrome 已登录 EBK，按步骤回复待回复评论。",
+        login: "打开评论页跳到登录页。立即停止，不汇总、不编造数字。"
+      },
+      {
+        title: "读取采集结果",
+        brief: "仅抓取成功后进行。",
+        ok: "从采集结果看每条评论的评分、是否回复成功。",
+        login: "跳过。没有可靠业务数据。"
+      },
+      {
+        title: "按 instruction 填 metrics",
+        brief: "只填下发模板里已有的键。",
+        ok: "repliedCount=12，goodCount=9，badCount=3，skippedCount=4。",
+        login: "跳过。metrics 全 0，不装成成功。"
+      },
+      {
+        title: "回传结果 + 上传日志",
+        brief: "对齐 outputSchema；日志上 OSS，地址写入回包。",
+        ok: "后端入库后报表展示回复 12 条；排障走 clientLogOssUrl。",
+        login: "回传 LOGIN_REQUIRED，metrics 为 0；日志里能看到跳到登录页。"
+      }
+    ];
+
+    let path = "ok";
+    let current = 0;
+
+    function render() {
+      const box = document.getElementById("wf-steps");
+      box.innerHTML = STEPS.map((s, i) => {
+        const stop = path === "login" && i >= 2;
+        const cls = ["step", i === current ? "on" : "", stop ? "fail" : ""].filter(Boolean).join(" ");
+        return `<button type="button" class="${cls}" data-i="${i}">
+          <div class="idx">0${i + 1}</div>
+          <div><h3>${s.title}</h3><p>${s.brief}</p></div>
+        </button>`;
+      }).join("");
+      box.querySelectorAll(".step").forEach((el) => {
+        el.addEventListener("click", () => { current = Number(el.dataset.i); render(); });
+      });
+
+      const s = STEPS[current];
+      const success = path === "ok";
+      const body = success ? s.ok : s.login;
+      const result = success ? OK : NEED_LOGIN;
+      const showResult = current === 4 || (path === "login" && current >= 1);
+      document.getElementById("wf-detail").innerHTML = `
+        <h3>${s.title}</h3>
+        <div class="meta">${success ? "路径：抓取成功 → 填 metrics → 回传" : "路径：未登录 → 立即停 → 仍回传同一骨架（metrics 为 0）"}</div>
+        <p>${body}</p>
+        ${showResult ? `
+          <div class="kpis">
+            <div class="kpi"><span>平台</span><strong>${result.platformLabel}</strong></div>
+            <div class="kpi"><span>状态</span><strong>${result.ok ? "成功" : "失败"}</strong></div>
+            <div class="kpi"><span>耗时</span><strong>${Math.round(result.durationMs / 1000)}s</strong></div>
+            <div class="kpi"><span>回复 / 好评 / 差评</span><strong>${result.metrics.repliedCount} / ${result.metrics.goodCount} / ${result.metrics.badCount}</strong></div>
+          </div>
+          <span class="pill ${result.ok ? "" : "bad"}">${result.ok ? "已回传，可供报表展示" : "已回传：引导去 Chrome 登录，不展示假数据"}</span>
+        ` : ""}
+      `;
+    }
+
+    document.getElementById("wf-btnOk").addEventListener("click", () => {
+      path = "ok"; current = 0;
+      document.getElementById("wf-btnOk").classList.add("primary");
+      document.getElementById("wf-btnLogin").classList.remove("primary");
+      render();
+    });
+    document.getElementById("wf-btnLogin").addEventListener("click", () => {
+      path = "login"; current = 1;
+      document.getElementById("wf-btnLogin").classList.add("primary");
+      document.getElementById("wf-btnOk").classList.remove("primary");
+      render();
+    });
+
+    render();
+  
+})();
+(function () {
+
+    const SCHEMA = `{
+  User     id, ...
+  Device   id, userId, hostname,
+           extensionBoundAt,   // 首次上报扩展在线的时间；只写一次
+           extensionConnected, // 当前心跳
+           seenAt
+  Task     id, userId, status,
+           assigneeDeviceId    // 投给第一台时写入
+}`;
+
+    const HEARTBEAT = `{
+  "deviceId": "dev_desk_01",
+  "userId": "u_88",
+  "extensionConnected": true
+}`;
+
+    document.getElementById("acc-schema").textContent = SCHEMA.trim();
+    document.getElementById("acc-heartbeat").textContent = HEARTBEAT.trim();
+
+    const SCENES = {
+      a: {
+        title: "一跑一看",
+        meta: "办公室装了扩展；笔记本只装客户端。用户无感知。",
+        devices: [
+          {
+            name: "办公室台式机",
+            cls: "pick",
+            pills: [
+              ["客户端", "ok"],
+              ["扩展在线", "ok"],
+              ["第一台 / 唯一", "accent"]
+            ],
+            line: "候选集只有它。任务只推到这台。"
+          },
+          {
+            name: "家里笔记本",
+            cls: "idle",
+            pills: [
+              ["客户端", "ok"],
+              ["未装扩展", "warn"],
+              ["只读", ""]
+            ],
+            line: "看报表。不在候选，收不到任务。"
+          }
+        ],
+        steps: [
+          "过滤：extensionConnected && 心跳未过期 → [desk]。",
+          "n=1，assigneeDeviceId=desk，push 到 device:desk。",
+          "笔记本只有 REST，继续刷报表。"
+        ]
+      },
+      b: {
+        title: "两台都装了扩展",
+        meta: "不弹窗。按 extensionBoundAt 取最早的一台。",
+        devices: [
+          {
+            name: "办公室台式机",
+            cls: "pick",
+            pills: [
+              ["扩展在线", "ok"],
+              ["boundAt 更早", "accent"],
+              ["本单执行端", "ok"]
+            ],
+            line: "2026-03-01 首次连上扩展。排序第一。"
+          },
+          {
+            name: "备用机",
+            cls: "idle",
+            pills: [
+              ["扩展在线", "ok"],
+              ["boundAt 更晚", ""],
+              ["不跑这一单", "warn"]
+            ],
+            line: "2026-09-18 才装的扩展。在线也不投。"
+          }
+        ],
+        steps: [
+          "候选 = 两台都在线且有扩展。",
+          "按 extensionBoundAt ASC → desk。",
+          "只 push 给 desk。备用机保持登录，不当执行端。"
+        ]
+      },
+      c: {
+        title: "都没装扩展",
+        meta: "任务不下发。已登录的客户端给出同一条提示。",
+        devices: [
+          {
+            name: "办公室台式机",
+            cls: "warn",
+            pills: [
+              ["客户端", "ok"],
+              ["未装扩展", "warn"]
+            ],
+            line: "能看报表。不能跑任务。"
+          },
+          {
+            name: "家里笔记本",
+            cls: "warn",
+            pills: [
+              ["客户端", "ok"],
+              ["未装扩展", "warn"]
+            ],
+            line: "同样只读。"
+          }
+        ],
+        steps: [
+          "候选 = []，status=WAITING_EXTENSION。",
+          "两端都提示：请在一台电脑上安装并打开浏览器扩展。",
+          "任意一台装上并心跳成功后，n=1，自动投过去，提示消失。"
+        ]
+      }
+    };
+
+    let scene = "a";
+
+    function render() {
+      const s = SCENES[scene];
+      document.getElementById("acc-devices").innerHTML = s.devices.map((d) => `
+        <div class="device ${d.cls}">
+          <h3>${d.name}</h3>
+          <p>${d.line}</p>
+          <div class="pills">${d.pills.map(([t, k]) => `<span class="pill ${k}">${t}</span>`).join("")}</div>
+        </div>
+      `).join("");
+      document.getElementById("acc-detail").innerHTML = `
+        <h3>${s.title}</h3>
+        <div class="meta">${s.meta}</div>
+        <ol>${s.steps.map((x) => `<li>${x}</li>`).join("")}</ol>
+      `;
+    }
+
+    function setScene(id) {
+      scene = id;
+      document.querySelectorAll("#tab-account .btns .btn").forEach((b) => b.classList.remove("primary"));
+      document.getElementById({ a: "acc-btnA", b: "acc-btnB", c: "acc-btnC" }[id]).classList.add("primary");
+      render();
+    }
+
+    document.getElementById("acc-btnA").addEventListener("click", () => setScene("a"));
+    document.getElementById("acc-btnB").addEventListener("click", () => setScene("b"));
+    document.getElementById("acc-btnC").addEventListener("click", () => setScene("c"));
+    render();
+  
+})();
+(function () {
+
+    const BIND = {
+      platform: "ctrip",
+      platformHotelId: "1678321",
+      name: "杭州西湖店",
+      boundAt: "2026-09-18T15:40:00+08:00"
+    };
+
+    const CONFIG = {
+      taskId: "T-10421",
+      platform: "ctrip",
+      taskType: "review_reply",
+      targetHotel: {
+        hotelId: "h_8801",
+        platformHotelId: "1678321",
+        name: "杭州西湖店"
+      },
+      instruction: "…",
+      outputSchema: { "metrics": { "repliedCount": 0 } },
+      workflow: ["… 第一步必须是读取当前酒店并比对 …"]
+    };
+
+    const MISMATCH = {
+      taskId: "T-10421",
+      platform: "ctrip",
+      taskType: "review_reply",
+      ok: false,
+      needsLogin: false,
+      errorCode: "HOTEL_MISMATCH",
+      error: "当前商家后台为「上海静安店」(338821)，本单目标为「杭州西湖店」(1678321)。未采集、未回复。",
+      targetHotel: {
+        hotelId: "h_8801",
+        platformHotelId: "1678321",
+        name: "杭州西湖店"
+      },
+      actualHotelId: "338821",
+      actualHotelName: "上海静安店",
+      metrics: {
+        repliedCount: 0,
+        goodCount: 0,
+        badCount: 0,
+        skippedCount: 0
+      }
+    };
+
+    document.getElementById("htl-bindJson").textContent = JSON.stringify(BIND, null, 2);
+    document.getElementById("htl-configJson").textContent = JSON.stringify(CONFIG, null, 2);
+    document.getElementById("htl-mismatchJson").textContent = JSON.stringify(MISMATCH, null, 2);
+
+    const SCENES = {
+      a: {
+        title: "开跑就是错店",
+        meta: "Chrome 里当前是上海静安店，任务要杭州西湖店。",
+        steps: [
+          "扩展先打「当前酒店」接口 / 读顶栏，得到 338821。",
+          "与 targetHotel.platformHotelId=1678321 比较 → 不等。",
+          "workflow 其余步骤全部跳过。不听评论包，不点回复。",
+          "回 HOTEL_MISMATCH。客户端提示去商家后台切到杭州西湖店。",
+          "用户切好后，下一轮心跳探测通过，同一 task 再投，不必改配置。"
+        ]
+      },
+      b: {
+        title: "跑到一半切店",
+        meta: "开头是对的。用户在另一个标签把顶栏酒店换成了别家。",
+        steps: [
+          "开跑前比对通过，开始听 getComment。",
+          "已采到 3 条杭州店评论。此时会话酒店变成 338821。",
+          "下一条包带了别的酒店 ID，或侦测到切换接口 → 立即 abort。",
+          "本单已采数据作废，不交给 Agent 汇总。回 HOTEL_SWITCHED，metrics 全 0。",
+          "禁止「前 3 条是对的，先交 3 条」——写操作尤其不能半单提交后再切店续跑。"
+        ]
+      },
+      c: {
+        title: "店对得上",
+        meta: "当前酒店 ID 等于 target，过程中每条包也一致。",
+        steps: [
+          "开跑前 1678321 === 1678321，进入 workflow。",
+          "每条采集校验酒店字段；没有字段的包沿用开跑时的会话 ID。",
+          "正常定稿。回包带 targetHotel，actualHotelId 与目标相同。",
+          "报表入库的数字只属于这一家店。"
+        ]
+      }
+    };
+
+    let scene = "a";
+
+    function render() {
+      const s = SCENES[scene];
+      document.getElementById("htl-detail").innerHTML = `
+        <h3>${s.title}</h3>
+        <div class="meta">${s.meta}</div>
+        <ol>${s.steps.map((x) => `<li>${x}</li>`).join("")}</ol>
+      `;
+    }
+
+    function setScene(id) {
+      scene = id;
+      document.querySelectorAll("#tab-hotel .btns .btn").forEach((b) => b.classList.remove("primary"));
+      document.getElementById({ a: "htl-btnA", b: "htl-btnB", c: "htl-btnC" }[id]).classList.add("primary");
+      render();
+    }
+
+    document.getElementById("htl-btnA").addEventListener("click", () => setScene("a"));
+    document.getElementById("htl-btnB").addEventListener("click", () => setScene("b"));
+    document.getElementById("htl-btnC").addEventListener("click", () => setScene("c"));
+    render();
+  
+})();
+(function () {
+
+    const $ = (s) => {
+      if (s.startsWith("#")) {
+        const id = s.slice(1);
+        return document.getElementById(id.startsWith("prd-") ? id : "prd-" + id)
+          || document.getElementById(id);
+      }
+      return document.querySelector("#tab-product " + s);
+    };
+    const state = {
+      scene: "login",
+      onboardStep: 0,
+      inner: "reports",
+      modalKind: null,
+    };
+
+    function setChip(text, cls) {
+      const el = $("#prd-jobchip");
+      el.textContent = text;
+      el.className = "jobchip " + (cls || "");
+    }
+
+    function showShell(which) {
+      ["login", "onboard", "app"].forEach((id) => {
+        $("#prd-view-" + id).classList.toggle("active", id === which);
+      });
+    }
+
+    function showInner(id) {
+      state.inner = id;
+      ["reports", "sites", "account"].forEach((v) => {
+        document.getElementById("prd-view-" + v).classList.toggle("active", v === id);
+      });
+      document.querySelectorAll("#tab-product .nav .item").forEach((b) => {
+        if (b.dataset.view === id) b.setAttribute("aria-current", "page");
+        else b.removeAttribute("aria-current");
+      });
+    }
+
+    function banner(html, kind) {
+      const el = $("#prd-banner");
+      if (!html) {
+        el.classList.remove("show");
+        el.innerHTML = "";
+        return;
+      }
+      el.className = "banner show " + (kind || "warn");
+      el.innerHTML = html;
+    }
+
+    function hideModal() {
+      $("#prd-modal").classList.remove("show");
+      state.modalKind = null;
+    }
+
+    function showModal(kind, title, body, okText) {
+      state.modalKind = kind;
+      $("#prd-modalTitle").textContent = title;
+      $("#prd-modalBody").textContent = body;
+      $("#prd-modalOk").textContent = okText || "确定";
+      $("#prd-modal").classList.add("show");
+    }
+
+    function renderOnboard() {
+      const labels = ["1 扩展", "2 绑定酒店", "3 完成"];
+      $("#prd-onboardSteps").innerHTML = labels
+        .map((t, i) => (i === state.onboardStep ? `<b>${t}</b>` : `<span>${t}</span>`))
+        .join(" · ");
+      const body = $("#prd-onboardBody");
+      if (state.onboardStep === 0) {
+        body.innerHTML = `
+          <h1>安装浏览器扩展</h1>
+          <p class="hint">要跑任务必须装。只看报表可以跳过，这台电脑不会收到任务。</p>
+          <button type="button" class="btn primary" id="btnExtDone">我已安装并打开扩展</button>
+          <button type="button" class="btn" id="btnSkipExt" style="margin-left:8px">这台只看报表</button>`;
+        $("#btnExtDone").onclick = () => { state.onboardStep = 1; renderOnboard(); };
+        $("#btnSkipExt").onclick = () => applyScene("viewer");
+      } else if (state.onboardStep === 1) {
+        body.innerHTML = `
+          <h1>绑定酒店</h1>
+          <p class="hint">先在 Chrome 打开携程 EBK，把顶栏切到要抓的那家店，再点绑定。我们读取当前店，不手填 ID。</p>
+          <button type="button" class="btn primary" id="btnDoBind">绑定当前酒店</button>`;
+        $("#btnDoBind").onclick = () => {
+          showModal(
+            "bind",
+            "确认绑定",
+            "将绑定携程 EBK：杭州西湖店（1678321）。确认后同步到后端，该平台任务才能下发。",
+            "确认绑定",
+          );
+        };
+      } else {
+        body.innerHTML = `
+          <h1>可以待命了</h1>
+          <p class="hint">任务由后端下发。请保持 Chrome 已登录商家后台。报表出来后在左侧查看。</p>
+          <button type="button" class="btn primary" id="btnOnboardDone">进入客户端</button>`;
+        $("#btnOnboardDone").onclick = () => applyScene("ready");
+      }
+    }
+
+    function applyScene(name) {
+      state.scene = name;
+      document.querySelectorAll("#tab-product .scenes .btn").forEach((b) => {
+        b.classList.toggle("primary", b.dataset.scene === name);
+      });
+      hideModal();
+      $("#prd-repFail").style.display = "none";
+      $("#prd-kpiWait").textContent = "0";
+      $("#prd-kpiReply").textContent = "12";
+      $("#prd-kpiScore").textContent = "9 / 3";
+      $("#prd-rep1pill").className = "pill ok";
+      $("#prd-rep1pill").textContent = "今天 14:02 完成";
+      $("#prd-rep1").textContent = "T-10421 · 回复 12 · 好评 9 · 差评 3 · 跳过 4";
+      $("#prd-extBadge").className = "ext on";
+      $("#prd-extBadge").textContent = "扩展已连接";
+      $("#prd-roleDd").textContent = "执行端 · 扩展首次绑定 2026-03-01";
+      $("#prd-ctripHint").innerHTML = `<span class="pill ok">扩展在线</span><span class="pill ok">Chrome 已登录</span><span class="pill ok">已绑定 杭州西湖店 · 1678321</span>`;
+      banner("");
+
+      if (name === "login") {
+        showShell("login");
+        setChip("未登录", "idle");
+        return;
+      }
+      if (name === "onboard") {
+        state.onboardStep = 0;
+        showShell("onboard");
+        setChip("安装向导", "wait");
+        renderOnboard();
+        return;
+      }
+
+      showShell("app");
+      showInner("reports");
+
+      if (name === "ready") {
+        setChip("空闲 · 等待任务", "idle");
+      } else if (name === "viewer") {
+        setChip("只读 · 本机不执行", "idle");
+        $("#prd-extBadge").className = "ext off";
+        $("#prd-extBadge").textContent = "未装扩展 · 只看报表";
+        $("#prd-roleDd").textContent = "只读 · 任务在其他已装扩展的电脑上跑";
+        $("#prd-ctripHint").innerHTML = `<span class="pill warn">本机无扩展</span><span class="pill ok">已绑定（账号级）杭州西湖店</span>`;
+        banner("这台电脑只看报表。任务只会打到已安装扩展的电脑。", "warn");
+      } else if (name === "noext") {
+        setChip("待执行 · 未装扩展", "wait");
+        $("#prd-extBadge").className = "ext off";
+        $("#prd-extBadge").textContent = "未装扩展";
+        $("#prd-kpiWait").textContent = "1";
+        $("#prd-roleDd").textContent = "未成为执行端";
+        banner(
+          `<strong>请在一台电脑上安装并打开浏览器扩展</strong>账号下还没有执行端，评论回复任务未下发。`,
+          "warn",
+        );
+        $("#prd-ctripHint").innerHTML = `<span class="pill warn">扩展未连接</span><span class="pill warn">未绑定</span>`;
+      } else if (name === "loginreq") {
+        setChip("请在浏览器登录", "wait");
+        showInner("reports");
+        $("#prd-kpiWait").textContent = "1";
+        $("#prd-repFail").style.display = "block";
+        banner(
+          `<strong>任务已暂停：商家后台需要登录</strong>请在 Chrome 里按平时习惯登录携程 EBK（短信、扫码、滑块均可）。我们不收集密码。
+           <div style="margin-top:8px"><button type="button" class="btn primary" id="btnGoLogin">打开登录页</button></div>`,
+          "warn",
+        );
+        $("#btnGoLogin").onclick = () =>
+          showModal("chrome-login", "请在 Chrome 里登录", "已打开携程 EBK 登录页。完成后点「我已登录」。", "我已登录，继续");
+      } else if (name === "mismatch") {
+        setChip("请切换到杭州西湖店", "wait");
+        $("#prd-kpiWait").textContent = "1";
+        banner(
+          `<strong>当前商家后台是「上海静安店」</strong>本单要抓「杭州西湖店」(1678321)。请在 EBK 顶栏切换后等待，或点「已切换」。不要在客户端改绑定来迁就当前页。
+           <div style="margin-top:8px"><button type="button" class="btn primary" id="btnSwitched">已切换到目标店</button></div>`,
+          "warn",
+        );
+        $("#btnSwitched").onclick = () => applyScene("running");
+      } else if (name === "running") {
+        setChip("后台执行中 · 携程评论回复", "");
+        $("#prd-kpiReply").textContent = "—";
+        $("#prd-kpiScore").textContent = "—";
+        $("#prd-rep1pill").className = "pill";
+        $("#prd-rep1pill").textContent = "进行中";
+        $("#prd-rep1").textContent = "分页拉取 → 生成回复 → 提交 → 入库。请保持 Chrome 不要切店。";
+      }
+    }
+
+    document.querySelectorAll("#tab-product .scenes .btn").forEach((b) => {
+      b.addEventListener("click", () => applyScene(b.dataset.scene));
+    });
+    document.querySelectorAll("#tab-product .nav .item").forEach((b) => {
+      b.addEventListener("click", () => showInner(b.dataset.view));
+    });
+    $("#prd-btnLogin").addEventListener("click", () => applyScene("onboard"));
+    $("#prd-btnLogout").addEventListener("click", () => applyScene("login"));
+    $("#prd-btnOpenCtrip").addEventListener("click", () =>
+      showModal("open", "已在浏览器打开", "已打开携程 EBK。登录和切店都在网页里完成。", "好"),
+    );
+    $("#prd-btnBindCtrip").addEventListener("click", () => {
+      showInner("sites");
+      showModal(
+        "bind",
+        "确认绑定",
+        "当前 Chrome 为杭州西湖店（1678321）。确认后覆盖本账号的携程绑定。",
+        "确认绑定",
+      );
+    });
+    $("#prd-btnBindMeituan").addEventListener("click", () =>
+      showModal(
+        "bind-mt",
+        "绑定美团酒店",
+        "请先在 Chrome 打开美团商家后台并切到目标店，再确认。将读取当前店 ID。",
+        "读取并绑定",
+      ),
+    );
+    $("#prd-modalCancel").addEventListener("click", hideModal);
+    $("#prd-modalOk").addEventListener("click", () => {
+      const kind = state.modalKind;
+      hideModal();
+      if (kind === "bind" && state.scene === "onboard") {
+        state.onboardStep = 2;
+        renderOnboard();
+      } else if (kind === "chrome-login") {
+        applyScene("running");
+      } else if (kind === "bind-mt") {
+        showInner("sites");
+      }
+    });
+
+    applyScene("login");
+  
+})();
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "maxRetry": 1,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://example.com/list",
+      "event": "open_page"
+    },
+    {
+      "type": "dom_snapshot",
+      "event": "ui_map",
+      "need_collect": true,
+      "max_count": 80
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "maxRetry": 2,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://example.com/about",
+      "event": "open_about"
+    },
+    {
+      "type": "text",
+      "selector": "h1, .page-title",
+      "event": "page_title",
+      "need_collect": true
+    }
+  ]
+}

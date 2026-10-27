@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>酒店上下文 · 防串店</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --bg-2: #ece7dc;
+      --paper: #fbfaf6;
+      --ink: #1d2430;
+      --muted: #5c6570;
+      --line: #d8d2c4;
+      --accent: #2a4a78;
+      --accent-soft: #e4ebf4;
+      --ok: #2c6a4a;
+      --ok-soft: #e3f0e8;
+      --warn: #8a5a14;
+      --warn-soft: #f5ead6;
+      --bad: #9b3a2c;
+      --bad-soft: #f6e4e0;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
+    .kicker {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }
+    h2 { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
+    .lede { color: var(--muted); max-width: 72ch; margin: 0 0 28px; }
+    code { font-family: var(--mono); font-size: 12px; }
+
+    .chain {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 800px) { .chain { grid-template-columns: 1fr 1fr; } }
+    .chain article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 118px;
+    }
+    .chain .n { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }
+    .chain h3 { margin: 0 0 4px; font-size: 13px; }
+    .chain p { margin: 0; font-size: 12px; color: var(--muted); }
+
+    .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    @media (max-width: 800px) { .three { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 14px; }
+    .card p { margin: 0; font-size: 13px; color: var(--muted); }
+    .who {
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      background: var(--bg-2);
+      color: var(--muted);
+    }
+    .who.ok { background: var(--ok-soft); color: var(--ok); }
+    .who.warn { background: var(--warn-soft); color: var(--warn); }
+    .who.bad { background: var(--bad-soft); color: var(--bad); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--bg-2); font-weight: 500; font-size: 12px; color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .panel h3 { margin: 0 0 8px; font-size: 14px; }
+    .panel .meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .panel ol { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+    .panel li { margin: 4px 0; }
+
+    pre {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .note {
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+    }
+    .note strong { display: block; margin-bottom: 4px; }
+    .warn-box {
+      background: var(--warn-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin: 16px 0;
+    }
+    .warn-box strong { display: block; margin-bottom: 4px; color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">酒店上下文 · 绑定 + 运行时核对</div>
+    <h1>平台酒店 ID 安装时绑一次，之后任务按这份下发</h1>
+    <p class="lede">
+      后端一开始不知道携程/美团的酒店 ID。这个 ID 只存在商家后台的登录态里。
+      所以安装向导里要有「绑定酒店」：点按钮，扩展去当前 Chrome 读出平台酒店 ID，<strong>客户端保存并同步后端</strong>。没绑定就不下发该平台任务。
+      绑定不是每次跑任务再选一次店；跑的时候只拿这份 ID 和当前页面核对，防串店。
+    </p>
+
+    <h2>安装时：绑定平台酒店</h2>
+    <div class="chain">
+      <article>
+        <div class="n">01</div>
+        <h3>装客户端 + 扩展</h3>
+        <p>只装客户端看报表；要跑任务才装扩展。绑定按钮依赖扩展。</p>
+      </article>
+      <article>
+        <div class="n">02</div>
+        <h3>Chrome 登录商家后台</h3>
+        <p>和平时一样。先把顶栏切到「就是要抓的那家店」，再点绑定。</p>
+      </article>
+      <article>
+        <div class="n">03</div>
+        <h3>点「绑定酒店」</h3>
+        <p>扩展读当前店（同一套「我是谁」探测）。弹出店名 + platformHotelId，确认后写入。</p>
+      </article>
+      <article>
+        <div class="n">04</div>
+        <h3>本地保存 + 上报后端</h3>
+        <p>只存在客户端，后端第一次下发仍然没有 ID。两边都有了才允许投任务。</p>
+      </article>
+    </div>
+
+    <div class="split" style="margin-bottom:28px">
+      <div class="card">
+        <h3>绑定成功后写入的记录</h3>
+        <pre id="bindJson"></pre>
+      </div>
+      <div class="card">
+        <h3>按钮在做什么</h3>
+        <p style="margin-bottom:10px">不是让用户手填 ID，也不是酒店下拉。读的就是现在 Chrome 里开着的那家。</p>
+        <p>确认文案必须带店名和平台 ID，避免同名店绑错。绑错了再切顶栏、再点一次覆盖。一个平台可以绑多家：切到下一家再绑，后端按 platformHotelId 存多条。</p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>状态</th><th>后端</th><th>客户端</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>该平台一条绑定都没有</td>
+          <td>不下发该平台任务</td>
+          <td>安装未完成 / 商家连接页提示去绑定。和「没装扩展」同一类门闩。</td>
+        </tr>
+        <tr>
+          <td>已绑定</td>
+          <td>任务 <code>targetHotel.platformHotelId</code> 用这份</td>
+          <td>本地缓存同值，开跑前和当前 Chrome 比对。</td>
+        </tr>
+        <tr>
+          <td>重装客户端</td>
+          <td>绑定还在账号下</td>
+          <td>登录后拉下来，不必再绑。除非用户要改店。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>跑任务时：只核对，不再选店</h2>
+    <div class="chain">
+      <article>
+        <div class="n">01 下发</div>
+        <h3>targetHotel 写进配置</h3>
+        <p>用绑定得到的 platformHotelId。客户端不准另猜一家。</p>
+      </article>
+      <article>
+        <div class="n">02 开跑前</div>
+        <h3>读出当前店，比对</h3>
+        <p>从页面或「我是谁」接口拿 currentHotelId。不等指令去「感觉」。</p>
+      </article>
+      <article>
+        <div class="n">03 不一致</div>
+        <h3>停，不采、不写</h3>
+        <p>回 <code>HOTEL_MISMATCH</code>。metrics 全 0。提示去商家后台切到目标店。</p>
+      </article>
+      <article>
+        <div class="n">04 跑的过程中</div>
+        <h3>每条包校验酒店 ID</h3>
+        <p>用户中途切店 → <code>HOTEL_SWITCHED</code>，已采数据丢弃，不当成功回传。</p>
+      </article>
+    </div>
+
+    <h2>不要做的三件事</h2>
+    <div class="three">
+      <div class="card">
+        <span class="who bad">反模式</span>
+        <h3>信当前页面</h3>
+        <p>打开评论页就开始听包。当前是哪家店完全取决于用户上次点了什么。</p>
+      </div>
+      <div class="card">
+        <span class="who bad">反模式</span>
+        <h3>每次任务再选酒店</h3>
+        <p>和已绑定、已下发的 ID 容易选叉。选店只发生在安装绑定；任务里没有酒店下拉。</p>
+      </div>
+      <div class="card">
+        <span class="who warn">默认不要</span>
+        <h3>静默帮用户切店</h3>
+        <p>EBK 的当前酒店通常是整段登录态，不是单个标签。采集窗口里一切，用户正在看的页面也会变。</p>
+      </div>
+    </div>
+
+    <h2>配置里必须有目标酒店</h2>
+    <div class="split">
+      <div class="card">
+        <h3>WorkflowConfig 增加的字段</h3>
+        <pre id="configJson"></pre>
+      </div>
+      <div class="card">
+        <h3>错店时回传（同一骨架）</h3>
+        <pre id="mismatchJson"></pre>
+      </div>
+    </div>
+    <p class="lede" style="margin-top:12px">
+      <code>platformHotelId</code> 来自绑定，不是运营手填。必须是商家后台那个 ID。我们库里的 <code>hotelId</code> 可以后补关联，但不能代替平台 ID——扩展在页面里对得上的只有平台 ID。
+    </p>
+
+    <h2>当前酒店从哪读</h2>
+    <table>
+      <thead>
+        <tr><th>来源</th><th>用途</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>开跑前：平台「当前酒店」接口或顶栏 DOM</td>
+          <td>决定能不能开始。读不到等同于上下文不明，停，不要当匹配。</td>
+        </tr>
+        <tr>
+          <td>采集到的每个请求/响应里的酒店字段</td>
+          <td>决定这条数据能不能进本单。缺字段的包：能从会话上下文推断则用开跑时的 ID，推断不了就丢这条。</td>
+        </tr>
+        <tr>
+          <td>酒店切换接口 / 顶栏点击</td>
+          <td>跑的过程中一旦出现，立即 abort，不要等这一步 workflow 跑完。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>三种现场</h2>
+    <div class="btns">
+      <button type="button" class="btn primary" id="btnA">开跑就是错店</button>
+      <button type="button" class="btn" id="btnB">跑到一半切店</button>
+      <button type="button" class="btn" id="btnC">店对得上</button>
+    </div>
+    <div class="panel" id="detail"></div>
+
+    <h2>errorCode</h2>
+    <table>
+      <thead>
+        <tr><th>码</th><th>何时</th><th>客户端</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>HOTEL_UNBOUND</code></td>
+          <td>该平台还没有绑定记录（或任务里缺 platformHotelId）</td>
+          <td>不下发；已在客户端则提示去点「绑定酒店」。不是跑起来再猜。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_MISMATCH</code></td>
+          <td>开跑前 current ≠ 已绑定/已下发的 target</td>
+          <td>不采。提示：当前是「A」，本单要「B」，请在商家后台切换。不要让用户在客户端改绑定来「迁就」当前页，除非他确认绑错了要重绑。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_SWITCHED</code></td>
+          <td>已经开始后 current 变了，或某条采集的酒店 ID 对不上</td>
+          <td>丢弃本单已采数据。不把 A+B 混成一份 metrics。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_NOT_ACCESSIBLE</code></td>
+          <td>这套商家登录里根本没有目标酒店（读酒店列表对不上）</td>
+          <td>不是切一下能解决。提示换有权限的账号在 Chrome 登录。</td>
+        </tr>
+        <tr>
+          <td><code>HOTEL_UNKNOWN</code></td>
+          <td>登录着，但读不出当前酒店 ID</td>
+          <td>当失败，不要降级成「先抓了再说」。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>和登录提示同一类交互</h2>
+    <p class="lede" style="margin-bottom:12px">
+      绑定、登录、切店都是「去 Chrome 做一件商家后台里本来就会的事」。
+      客户端只有两个按钮级动作：<code>绑定酒店</code>（安装/改绑）和登录失效时的「去浏览器登录」。任务执行过程中没有酒店下拉。
+    </p>
+    <table>
+      <thead>
+        <tr><th>登录失效</th><th>酒店不对</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>扩展发现跳到登录页 / 401</td>
+          <td>扩展发现 currentHotelId ≠ targetHotel.platformHotelId</td>
+        </tr>
+        <tr>
+          <td>提示去 Chrome 完成登录</td>
+          <td>提示去 Chrome 切到「XX酒店」（带平台 ID，避免同名店）</td>
+        </tr>
+        <tr>
+          <td>回 <code>LOGIN_REQUIRED</code>，metrics 为 0</td>
+          <td>回 <code>HOTEL_MISMATCH</code>，metrics 为 0</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="warn-box">
+      <strong>为什么默认不自动切店</strong>
+      采集可以开独立窗口，但商家后台的「当前酒店」多半写在 Cookie / 全局 header 里，一切就是整次会话都切。
+      用户正在看 A 店订单，任务要 B 店，静默切换等于抢走他的工作台。
+      若某平台列表接口可以在 body 里带 <code>hotelId</code>、不依赖顶栏当前店，优先走 <code>call_api</code> 带目标 ID，根本不用动 UI。这是平台适配，不是账号协议。
+    </div>
+
+    <h2>Agent 侧</h2>
+    <table>
+      <thead>
+        <tr><th>点</th><th>规则</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>开跑前失败</td>
+          <td>和抓取失败一样：不跑 instruction，不编 metrics。</td>
+        </tr>
+        <tr>
+          <td>采集结果里混了别的店</td>
+          <td>扩展应在听包阶段就丢掉或直接 abort。Agent 不得「尽量汇总还能用的」。</td>
+        </tr>
+        <tr>
+          <td>回传信封</td>
+          <td>带上 <code>targetHotel</code> 与 <code>actualHotelId</code>（读到的当前店），方便后端对账，不进业务报表数字。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>约定</strong>
+      平台酒店 ID 靠安装时「绑定酒店」从 Chrome 读出，写入客户端并同步后端；未绑定不下发。
+      之后任务带这份 ID。扩展开跑前、采集中核对，对不上就停。绑是一次性身份，选店不进任务界面。
+    </div>
+  </div>
+
+  <script>
+    const BIND = {
+      platform: "ctrip",
+      platformHotelId: "1678321",
+      name: "杭州西湖店",
+      boundAt: "2026-09-18T15:40:00+08:00"
+    };
+
+    const CONFIG = {
+      taskId: "T-10421",
+      platform: "ctrip",
+      taskType: "review_reply",
+      targetHotel: {
+        hotelId: "h_8801",
+        platformHotelId: "1678321",
+        name: "杭州西湖店"
+      },
+      instruction: "…",
+      outputSchema: { "metrics": { "repliedCount": 0 } },
+      workflow: ["… 第一步必须是读取当前酒店并比对 …"]
+    };
+
+    const MISMATCH = {
+      taskId: "T-10421",
+      platform: "ctrip",
+      taskType: "review_reply",
+      ok: false,
+      needsLogin: false,
+      errorCode: "HOTEL_MISMATCH",
+      error: "当前商家后台为「上海静安店」(338821)，本单目标为「杭州西湖店」(1678321)。未采集、未回复。",
+      targetHotel: {
+        hotelId: "h_8801",
+        platformHotelId: "1678321",
+        name: "杭州西湖店"
+      },
+      actualHotelId: "338821",
+      actualHotelName: "上海静安店",
+      metrics: {
+        repliedCount: 0,
+        goodCount: 0,
+        badCount: 0,
+        skippedCount: 0
+      }
+    };
+
+    document.getElementById("bindJson").textContent = JSON.stringify(BIND, null, 2);
+    document.getElementById("configJson").textContent = JSON.stringify(CONFIG, null, 2);
+    document.getElementById("mismatchJson").textContent = JSON.stringify(MISMATCH, null, 2);
+
+    const SCENES = {
+      a: {
+        title: "开跑就是错店",
+        meta: "Chrome 里当前是上海静安店，任务要杭州西湖店。",
+        steps: [
+          "扩展先打「当前酒店」接口 / 读顶栏，得到 338821。",
+          "与 targetHotel.platformHotelId=1678321 比较 → 不等。",
+          "workflow 其余步骤全部跳过。不听评论包，不点回复。",
+          "回 HOTEL_MISMATCH。客户端提示去商家后台切到杭州西湖店。",
+          "用户切好后，下一轮心跳探测通过，同一 task 再投，不必改配置。"
+        ]
+      },
+      b: {
+        title: "跑到一半切店",
+        meta: "开头是对的。用户在另一个标签把顶栏酒店换成了别家。",
+        steps: [
+          "开跑前比对通过，开始听 getComment。",
+          "已采到 3 条杭州店评论。此时会话酒店变成 338821。",
+          "下一条包带了别的酒店 ID，或侦测到切换接口 → 立即 abort。",
+          "本单已采数据作废，不交给 Agent 汇总。回 HOTEL_SWITCHED，metrics 全 0。",
+          "禁止「前 3 条是对的，先交 3 条」——写操作尤其不能半单提交后再切店续跑。"
+        ]
+      },
+      c: {
+        title: "店对得上",
+        meta: "当前酒店 ID 等于 target，过程中每条包也一致。",
+        steps: [
+          "开跑前 1678321 === 1678321，进入 workflow。",
+          "每条采集校验酒店字段；没有字段的包沿用开跑时的会话 ID。",
+          "正常定稿。回包带 targetHotel，actualHotelId 与目标相同。",
+          "报表入库的数字只属于这一家店。"
+        ]
+      }
+    };
+
+    let scene = "a";
+
+    function render() {
+      const s = SCENES[scene];
+      document.getElementById("detail").innerHTML = `
+        <h3>${s.title}</h3>
+        <div class="meta">${s.meta}</div>
+        <ol>${s.steps.map((x) => `<li>${x}</li>`).join("")}</ol>
+      `;
+    }
+
+    function setScene(id) {
+      scene = id;
+      document.querySelectorAll(".btns .btn").forEach((b) => b.classList.remove("primary"));
+      document.getElementById({ a: "btnA", b: "btnB", c: "btnC" }[id]).classList.add("primary");
+      render();
+    }
+
+    document.getElementById("btnA").addEventListener("click", () => setScene("a"));
+    document.getElementById("btnB").addEventListener("click", () => setScene("b"));
+    document.getElementById("btnC").addEventListener("click", () => setScene("c"));
+    render();
+  </script>
+</body>
+</html>

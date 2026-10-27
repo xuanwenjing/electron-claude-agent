@@ -1,0 +1,220 @@
+import { app, net } from "electron";
+import AdmZip from "adm-zip";
+import fs from "node:fs";
+import path from "node:path";
+
+import { isExtensionConnected, reloadExtension } from "../crawl/bridgeServer";
+
+type RemoteExtensionInfo = { version: string; url: string };
+
+export type ExtensionUpdateResult =
+  | { ok: true; updated: false; version: string | null; message: string }
+  | { ok: true; updated: true; version: string; reloadSent: boolean }
+  | { ok: false; error: string };
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** 安装包内附带的初始版本（只读） */
+function getBundledExtensionDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "chrome-extension");
+  }
+  return path.join(__dirname, "../../../chrome-extension/dist");
+}
+
+/** 用户在 chrome://extensions「加载已解压的扩展程序」时选的固定目录 */
+export function getInstalledExtensionDir(): string {
+  return path.join(app.getPath("userData"), "chrome-extension");
+}
+
+function siblingDir(suffix: string): string {
+  return `${getInstalledExtensionDir()}.${suffix}`;
+}
+
+function readManifestVersion(dir: string): string | null {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+    return typeof manifest.version === "string" ? manifest.version : null;
+  } catch {
+    return null;
+  }
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+async function rmDir(dir: string): Promise<void> {
+  await fs.promises.rm(dir, { recursive: true, force: true });
+}
+
+/** Windows 上杀毒软件 / 索引服务短暂占用文件时 rename 会 EPERM/EBUSY，重试几次 */
+async function renameWithRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await fs.promises.rename(from, to);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (attempt >= 5 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw err;
+      await sleep(200 * (attempt + 1));
+    }
+  }
+}
+
+/** 上次替换中途退出时：正式目录缺失则用 .old 回滚，并清理残留的 .new / .old */
+async function recoverInterruptedSwap(): Promise<void> {
+  const target = getInstalledExtensionDir();
+  const oldDir = siblingDir("old");
+  if (!fs.existsSync(target) && fs.existsSync(oldDir)) {
+    await renameWithRetry(oldDir, target);
+  }
+  await rmDir(siblingDir("new"));
+  await rmDir(siblingDir("download"));
+  await rmDir(oldDir);
+}
+
+/** .new → 正式目录：正式目录先改名 .old，替换成功后删 .old，失败则回滚 */
+async function swapInNewDir(): Promise<void> {
+  const target = getInstalledExtensionDir();
+  const newDir = siblingDir("new");
+  const oldDir = siblingDir("old");
+
+  const hadTarget = fs.existsSync(target);
+  if (hadTarget) await renameWithRetry(target, oldDir);
+  try {
+    await renameWithRetry(newDir, target);
+  } catch (err) {
+    if (hadTarget) await renameWithRetry(oldDir, target);
+    throw err;
+  }
+  await rmDir(oldDir);
+}
+
+/** 启动时调用：固定目录不存在，或安装包内版本更高时，用安装包内版本覆盖 */
+export async function ensureExtensionInstalled(): Promise<string> {
+  const target = getInstalledExtensionDir();
+  await recoverInterruptedSwap();
+
+  const bundled = getBundledExtensionDir();
+  const bundledVersion = readManifestVersion(bundled);
+  if (!bundledVersion) {
+    console.warn("[ext-install] 未找到内置扩展（开发态请先 npm run ext:build）:", bundled);
+    return target;
+  }
+
+  const installedVersion = readManifestVersion(target);
+  if (installedVersion && compareVersions(bundledVersion, installedVersion) <= 0) {
+    return target;
+  }
+
+  await fs.promises.cp(bundled, siblingDir("new"), { recursive: true });
+  await swapInNewDir();
+  console.log(`[ext-install] 已安装内置扩展 ${installedVersion ?? "(无)"} → ${bundledVersion}:`, target);
+  return target;
+}
+
+/** zip 可能直接是扩展文件，也可能多包了一层目录 */
+function findManifestRoot(dir: string): string | null {
+  if (fs.existsSync(path.join(dir, "manifest.json"))) return dir;
+  const entries = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => !e.name.startsWith("__MACOSX"));
+  if (entries.length === 1 && entries[0].isDirectory()) {
+    const nested = path.join(dir, entries[0].name);
+    if (fs.existsSync(path.join(nested, "manifest.json"))) return nested;
+  }
+  return null;
+}
+
+async function fetchRemoteInfo(updateUrl: string): Promise<RemoteExtensionInfo> {
+  const res = await net.fetch(updateUrl, { cache: "no-store" });
+  if (!res.ok) throw new Error(`拉取 ext-latest.json 失败: HTTP ${res.status}`);
+  const body = (await res.json()) as Partial<RemoteExtensionInfo>;
+  if (typeof body.version !== "string" || typeof body.url !== "string") {
+    throw new Error("ext-latest.json 格式错误，需要 { version, url }");
+  }
+  return { version: body.version, url: new URL(body.url, updateUrl).toString() };
+}
+
+async function downloadAndExtract(zipUrl: string): Promise<void> {
+  const res = await net.fetch(zipUrl);
+  if (!res.ok) throw new Error(`下载扩展包失败: HTTP ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  const downloadDir = siblingDir("download");
+  const newDir = siblingDir("new");
+  await rmDir(downloadDir);
+  await rmDir(newDir);
+  try {
+    new AdmZip(buffer).extractAllTo(downloadDir, true);
+    const root = findManifestRoot(downloadDir);
+    if (!root) throw new Error("扩展包内未找到 manifest.json");
+    await renameWithRetry(root, newDir);
+  } finally {
+    await rmDir(downloadDir);
+  }
+}
+
+let pendingReload = false;
+let updating: Promise<ExtensionUpdateResult> | null = null;
+
+function requestReload(): boolean {
+  if (isExtensionConnected() && reloadExtension().ok) {
+    pendingReload = false;
+    return true;
+  }
+  pendingReload = true;
+  return false;
+}
+
+/** 扩展连上 bridge 时调用：更新时扩展未连接，则补发 reload_extension */
+export function flushPendingExtensionReload(): void {
+  if (pendingReload) requestReload();
+}
+
+async function runRemoteUpdate(): Promise<ExtensionUpdateResult> {
+  const updateUrl = process.env.EXT_UPDATE_URL?.trim();
+  const installedVersion = readManifestVersion(getInstalledExtensionDir());
+  if (!updateUrl) {
+    return { ok: true, updated: false, version: installedVersion, message: "未配置 EXT_UPDATE_URL，跳过扩展更新" };
+  }
+
+  try {
+    const remote = await fetchRemoteInfo(updateUrl);
+    if (remote.version === installedVersion) {
+      return { ok: true, updated: false, version: installedVersion, message: `扩展已是最新版本 ${remote.version}` };
+    }
+
+    await downloadAndExtract(remote.url);
+    try {
+      await swapInNewDir();
+    } finally {
+      await rmDir(siblingDir("new"));
+    }
+    const reloadSent = requestReload();
+    console.log(
+      `[ext-update] ${installedVersion ?? "(无)"} → ${remote.version}，` +
+        (reloadSent ? "已发送 reload_extension" : "扩展未连接，连上后再发送 reload_extension"),
+    );
+    return { ok: true, updated: true, version: remote.version, reloadSent };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error("[ext-update] 更新失败:", error);
+    return { ok: false, error };
+  }
+}
+
+/** 拉取 EXT_UPDATE_URL 指向的 ext-latest.json，版本不一致则下载替换并通知扩展重载 */
+export function checkRemoteExtensionUpdate(): Promise<ExtensionUpdateResult> {
+  if (!updating) {
+    updating = runRemoteUpdate().finally(() => {
+      updating = null;
+    });
+  }
+  return updating;
+}
