@@ -3,7 +3,6 @@ import type {
   Collector,
   NetworkUpdatePayload,
   WorkflowItem,
-  WorkflowOutput,
 } from "../types";
 import { resolveMaybeExpr, safeEval, urlMatch } from "../util";
 
@@ -118,43 +117,6 @@ export function updateData(
     headers: headers || {},
     cookies: cookies || {},
   });
-}
-
-export function updateOutputs(collector: Collector, workflowItem: WorkflowItem): void {
-  if (!workflowItem.outputs) return;
-  const outputs: WorkflowOutput[] = Array.isArray(workflowItem.outputs)
-    ? workflowItem.outputs
-    : [workflowItem.outputs];
-  const event = resolveEvent(collector, workflowItem, workflowItem.type || "output");
-  if (!collector.data[event]) {
-    collector.data[event] = { type: "array", content: [] };
-  }
-  const existing = collector.data[event];
-  if (existing.type === "text" || existing.type === "dom_snapshot") {
-    for (const item of outputs) {
-      const name = String(resolveMaybeExpr(collector.variables, item.name));
-      if (item.value !== undefined && /^\${[\s\S]*}$/.test(String(item.value).trim())) {
-        collector.variables[name] = safeEval(collector.variables, item.value);
-      } else if (item.value !== undefined) {
-        collector.variables[name] = item.value;
-      } else {
-        collector.variables[name] = existing.value;
-      }
-    }
-    return;
-  }
-  const entry = collector.data[event] as CollectedArray;
-  for (const item of outputs) {
-    const name = String(resolveMaybeExpr(collector.variables, item.name));
-    if (item.value !== undefined && /^\${[\s\S]*}$/.test(String(item.value).trim())) {
-      const value = safeEval(collector.variables, item.value);
-      entry.content.push({ name, value });
-      collector.variables[name] = value;
-    } else {
-      entry.content.push({ name, value: item.value });
-      if (name) collector.variables[name] = item.value;
-    }
-  }
 }
 
 export async function isDataComplete(

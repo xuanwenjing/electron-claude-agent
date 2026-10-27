@@ -86,7 +86,7 @@ function parseWorkflowConfig(
 const workflowConfigField = z
   .union([z.record(z.string(), z.any()), z.string()])
   .describe(
-    "WorkflowConfig 对象（推荐）。抓取字段：maxRetry、workflow。Agent 侧可选：instruction（如何处理抓取结果）、outputSchema（最终 JSON 形态）；扩展忽略后两字段，会写入 crawl/<时间_短id>/config.json。也可传同等内容的 JSON 字符串。",
+    "WorkflowConfig 对象（推荐）。抓取字段：maxRetry、workflow，可选 platform（ctripEbk | ctripHotel）+ needLogin（navigate 到该平台后校验登录，未登录直接失败）。Agent 侧可选：instruction（如何处理抓取结果）、outputSchema（最终 JSON 形态）；扩展忽略后两字段，会写入 crawl/<时间_短id>/config.json。也可传同等内容的 JSON 字符串。",
   );
 
 function previewValue(value: unknown): unknown {

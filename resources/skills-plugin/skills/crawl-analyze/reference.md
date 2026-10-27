@@ -6,6 +6,8 @@
 {
   maxRetry?: number;          // 整单失败重试次数，默认按引擎约 3
   workflow: WorkflowItem[];   // 必填，顺序执行（扩展执行）
+  platform?: "ctripEbk" | "ctripHotel"; // 任务所属平台（携程EBK / 携程酒店）
+  needLogin?: boolean;        // true：navigate 到 platform 站点后校验登录态，未登录直接失败、不重试
   instruction?: string;       // Agent 侧：对抓取结果如何处理（扩展忽略）
   outputSchema?: unknown;     // Agent 侧：最终 JSON 形态 / Schema（扩展忽略）
 }
@@ -38,6 +40,10 @@
 
 - `text` 采集：`collected.<event>` = `{ "type": "text", "value": "..." }`
 - `dom_snapshot` 采集：`collected.<event>` = `{ "type": "dom_snapshot", "value": { url, title, elements, … } }`
+- 酒店信息（自动）：`navigate` 落到携程 EBK（`ebooking.ctrip.com`）或携程酒店（`hotels.ctrip.com`）后，引擎自动写入
+  `collected.hotelInfo` = `{ "type": "hotel_info", "platform": "ctripEbk" | "ctripHotel", "value": { hotelInfo, … } }`，
+  同时 `variables.hotelInfo` = `{ platform, hotelInfo, … }`，后续步骤可用 `${hotelInfo.hotelInfo.hotelCode}`。
+  EBK 的 `value` 含 `hotelInfo` / `userInfo`；携程酒店含 `hotelInfo` / `ibuHotelData` / `newIbuHotelData`。获取失败只记日志不中断。
 
 ---
 
@@ -69,7 +75,6 @@
 | `need_collect` | `true` 时本步必须采到数据（网络命中或 text 写入） |
 | `reg_exp` | 网络 URL 匹配（`urlMatch`）：逗号分隔为 **OR** 多规则，`*` 通配。监听命中与写入 `collected` 使用同一套规则。正式采集写稳定路径片段；探测可用 `"."` |
 | `global_variables` | 对象或数组。`{ name, url }`：URL 命中时把该请求的 req/res/headers/cookies 写入 `variables[name]`；`{ name, value }`：直接/表达式赋值 |
-| `outputs` | 步骤结束时写变量。`{ name, value }`，`value` 可为 `${expr}` |
 | `allow_exception` | `true` 时本步失败不抛死，继续 |
 | `pass_condition` | 步骤末表达式，须为真，如 `"${someVar != null}"` |
 | `wait_before_finish` | 步骤收尾额外等待（毫秒） |
@@ -84,7 +89,7 @@
 
 - 整段：`"${foo.bar}"`、`"${list.content.length > 0}"`
 - 字符串插值：`"https://x.com/item/${id}"`
-- 用在：`url`、`value`、`event`、`outputs`、`pass_condition`、`break_condition`、`max_count`、`call_api_params` 内字段等
+- 用在：`url`、`value`、`event`、`pass_condition`、`break_condition`、`max_count`、`call_api_params` 内字段等
 - `global_variables` / 网络命中后，变量里常见结构：
 
 ```js
@@ -348,7 +353,7 @@ variables.apiFoo = {
 - `selector` 支持逗号多选，命中第一个存在的。
 - `text` + `need_collect` → `collected[event]` 为 `{ type: "text", value }`
 - `dom_snapshot` + `need_collect` → `collected[event]` 为 `{ type: "dom_snapshot", value }`
-- click/input 本身不写入 collected，除非另有网络监听或 `outputs`。
+- click/input 本身不写入 collected，除非另有网络监听。
 
 ---
 

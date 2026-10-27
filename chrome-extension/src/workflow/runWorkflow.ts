@@ -24,11 +24,11 @@ import {
 import {
   createCollector,
   isDataComplete,
-  updateOutputs,
   updateTextData,
   clearNetworkCaptureContext,
   setNetworkCaptureContext,
 } from "./collect";
+import { NotLoggedInError, assertLoggedIn, collectHotelInfo } from "./hotelInfo";
 import type { CancelToken } from "./util";
 import { TaskCancelledError, cancellableSleep, resolveMaybeExpr, safeEval } from "./util";
 
@@ -97,6 +97,8 @@ export async function runWorkflow(
           await waitTabComplete(tabId, emit);
           await ensureContentReady(tabId);
           await ensurePageFetchProxy(tabId);
+          const hotelInfo = await collectHotelInfo(tabId, collector, emit);
+          assertLoggedIn(config, url, hotelInfo);
           await runDefaultWait(workflowItem, 15000, 3000, token);
         } else if (workflowItem.type === "call_api") {
           await handleApiFetch(tabId, collector, workflowItem, emit, token);
@@ -144,8 +146,6 @@ export async function runWorkflow(
         if (workflowItem.wait_before_finish != null) {
           await cancellableSleep(Number(workflowItem.wait_before_finish), token);
         }
-
-        updateOutputs(collector, workflowItem);
 
         const complete = await isDataComplete(collector, workflowItem, tabId);
         if (!complete.success) {
@@ -229,6 +229,10 @@ export async function runWorkflow(
       if (err instanceof TaskCancelledError || token?.cancelled) {
         emit("任务已取消");
         return { ok: false, error: "任务已取消", data: null };
+      }
+      if (err instanceof NotLoggedInError) {
+        emit(err.message);
+        return { ok: false, error: err.message, data: null };
       }
       lastError = err instanceof Error ? err.message : String(err);
       emit(`失败(${attempt}/${maxRetry}): ${lastError}`);

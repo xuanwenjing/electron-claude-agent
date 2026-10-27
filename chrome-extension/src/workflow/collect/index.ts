@@ -4,7 +4,6 @@ export {
   updateTextData,
   updateVariables,
   updateData,
-  updateOutputs,
   isDataComplete,
 } from "./collector";
 export {

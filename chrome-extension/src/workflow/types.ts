@@ -10,11 +10,6 @@ export type WorkflowStepType =
   | "dom_snapshot"
   | "loop";
 
-export interface WorkflowOutput {
-  name: string;
-  value?: unknown;
-}
-
 export interface GlobalVariable {
   name: string;
   url?: string;
@@ -56,7 +51,6 @@ export interface WorkflowItem {
   event?: string;
   need_collect?: boolean;
   reg_exp?: string;
-  outputs?: WorkflowOutput | WorkflowOutput[];
   global_variables?: GlobalVariable | GlobalVariable[];
   call_api_params?: CallApiParam | CallApiParam[];
   call_bot_params?: CallBotParam;
@@ -78,6 +72,10 @@ export interface WorkflowItem {
 export interface WorkflowConfig {
   maxRetry?: number;
   workflow?: WorkflowItem[];
+  /** 任务所属平台；配合 needLogin 校验登录态 */
+  platform?: HotelPlatform;
+  /** true 时：navigate 到 platform 对应站点后必须已登录，否则任务直接失败（不重试） */
+  needLogin?: boolean;
   /**
    * Agent 侧字段（扩展忽略）：描述对抓取结果如何处理。
    * 见 skills/workflow-task。
@@ -105,7 +103,16 @@ export interface CollectedArray {
   content: unknown[];
 }
 
-export type CollectedEntry = CollectedText | CollectedDomSnapshot | CollectedArray;
+export type HotelPlatform = "ctripEbk" | "ctripHotel";
+
+/** navigate 到携程 EBK / 携程酒店后自动写入 collected.hotelInfo */
+export interface CollectedHotelInfo {
+  type: "hotel_info";
+  platform: HotelPlatform;
+  value: Record<string, unknown>;
+}
+
+export type CollectedEntry = CollectedText | CollectedDomSnapshot | CollectedArray | CollectedHotelInfo;
 
 export interface Collector {
   data: Record<string, CollectedEntry>;
