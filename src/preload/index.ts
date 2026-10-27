@@ -109,6 +109,30 @@ contextBridge.exposeInMainWorld("crawlApi", {
   },
 });
 
+type RequestConfig = {
+  url: string;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  params?: Record<string, unknown>;
+  data?: unknown;
+  headers?: Record<string, string>;
+  timeout?: number;
+};
+type ExtraConfig = Omit<RequestConfig, "url" | "method" | "params" | "data">;
+
+const request = <T = any>(config: RequestConfig): Promise<T> => ipcRenderer.invoke("api:request", config);
+
+contextBridge.exposeInMainWorld("requestApi", {
+  request,
+  get: (url: string, params?: Record<string, unknown>, config?: ExtraConfig) =>
+    request({ ...config, url, method: "GET", params }),
+  post: (url: string, data?: unknown, config?: ExtraConfig) =>
+    request({ ...config, url, method: "POST", data }),
+  put: (url: string, data?: unknown, config?: ExtraConfig) =>
+    request({ ...config, url, method: "PUT", data }),
+  delete: (url: string, params?: Record<string, unknown>, config?: ExtraConfig) =>
+    request({ ...config, url, method: "DELETE", params }),
+});
+
 contextBridge.exposeInMainWorld("updateApi", {
   meta: (): Promise<{ version: string; packaged: boolean }> =>
     ipcRenderer.invoke("update:meta"),

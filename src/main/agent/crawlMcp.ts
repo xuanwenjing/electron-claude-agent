@@ -118,7 +118,7 @@ function slimCrawlData(data: unknown): unknown {
   };
   const collected: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(src.collected || {})) {
-    if (entry?.type === "text" || entry?.type === "dom_snapshot") {
+    if (entry && entry.type !== "array") {
       collected[key] = { type: entry.type, value: previewValue(entry.value) };
       continue;
     }

@@ -9,7 +9,7 @@ import type {
   WorkflowResult,
 } from "./types";
 import { handleApiFetch } from "./api";
-import { handleCallBackend, handleCallBot } from "./ourBackend";
+import { handleCallBackend } from "./ourBackend";
 import {
   acquireCrawlTab,
   ensureContentReady,
@@ -24,7 +24,6 @@ import {
 import {
   createCollector,
   isDataComplete,
-  updateTextData,
   clearNetworkCaptureContext,
   setNetworkCaptureContext,
 } from "./collect";
@@ -103,34 +102,17 @@ export async function runWorkflow(
         } else if (workflowItem.type === "call_api") {
           await handleApiFetch(tabId, collector, workflowItem, emit, token);
           await runDefaultWait(workflowItem, 5000, 3000, token);
-        } else if (workflowItem.type === "call_bot") {
-          await handleCallBot(collector, workflowItem, emit, token);
         } else if (workflowItem.type === "call_backend") {
           await handleCallBackend(collector, workflowItem, emit);
-        } else if (
-          workflowItem.type === "click" ||
-          workflowItem.type === "text" ||
-          workflowItem.type === "input" ||
-          workflowItem.type === "check" ||
-          workflowItem.type === "dom_snapshot"
-        ) {
-          if (tabId == null) throw new Error(`${workflowItem.type} 前需要先 navigate`);
-          const item: WorkflowItem = {
-            ...workflowItem,
-            value:
-              workflowItem.value !== undefined
-                ? resolveMaybeExpr(collector.variables, workflowItem.value)
-                : workflowItem.value,
-          };
-          const commonTaskRes = await sendContentTask(tabId, item);
+        } else if (workflowItem.type === "click") {
+          if (tabId == null) throw new Error("click 前需要先 navigate");
+          const commonTaskRes = await sendContentTask(tabId, workflowItem);
           if (!commonTaskRes?.success) {
             if (workflowItem.allow_exception) {
               emit(`忽略异常: ${commonTaskRes?.errorMessage || "unknown"}`);
             } else {
-              throw new Error(commonTaskRes?.errorMessage || `${workflowItem.type} 失败`);
+              throw new Error(commonTaskRes?.errorMessage || "click 失败");
             }
-          } else {
-            updateTextData(collector, workflowItem, commonTaskRes.data);
           }
           await runDefaultWait(workflowItem, 10000, 3000, token);
         } else if (workflowItem.type === "loop") {

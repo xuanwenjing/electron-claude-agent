@@ -1,6 +1,6 @@
 export { runWorkflow } from "./runWorkflow";
 export { pageFetch, handleApiFetch } from "./api";
-export { handleCallBot, handleCallBackend } from "./ourBackend";
+export { handleCallBackend } from "./ourBackend";
 export {
   setNetworkCaptureContext,
   clearNetworkCaptureContext,

@@ -1,17 +1,11 @@
 /**
  * Content Script（隔离世界）
- * - DO_COMMON_TASK: click / text / input / check / dom_snapshot
+ * - DO_COMMON_TASK: click
  * - PAGE_FETCH / XHR 转发
  */
 import { PAGE_FETCH_SOURCE, XHR_RESPONSE_TYPE } from "../shared/constants";
 import type { WorkflowItem } from "../workflow/types";
-import {
-  handleCheckTask,
-  handleClickTask,
-  handleInputTask,
-  handleTextTask,
-} from "./dom";
-import { handleDomSnapshotTask } from "./domSnapshot";
+import { handleClickTask } from "./dom";
 
 declare global {
   interface Window {
@@ -96,23 +90,6 @@ function main(): void {
       try {
         if (item.type === "click") {
           return sendResponse(await handleClickTask({ ...item, timeout }));
-        }
-        if (item.type === "text") {
-          return sendResponse(await handleTextTask({ ...item, timeout }));
-        }
-        if (item.type === "input") {
-          return sendResponse(await handleInputTask({ ...item, timeout }));
-        }
-        if (item.type === "check") {
-          return sendResponse(await handleCheckTask({ ...item, timeout }));
-        }
-        if (item.type === "dom_snapshot") {
-          return sendResponse(
-            handleDomSnapshotTask({
-              selector: item.selector,
-              max_count: item.max_count,
-            }),
-          );
         }
         return sendResponse({
           success: false,

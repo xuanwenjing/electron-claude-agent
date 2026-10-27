@@ -38,8 +38,6 @@
 }
 ```
 
-- `text` 采集：`collected.<event>` = `{ "type": "text", "value": "..." }`
-- `dom_snapshot` 采集：`collected.<event>` = `{ "type": "dom_snapshot", "value": { url, title, elements, … } }`
 - 酒店信息（自动）：`navigate` 落到携程 EBK（`ebooking.ctrip.com`）或携程酒店（`hotels.ctrip.com`）后，引擎自动写入
   `collected.hotelInfo` = `{ "type": "hotel_info", "platform": "ctripEbk" | "ctripHotel", "value": { hotelInfo, … } }`，
   同时 `variables.hotelInfo` = `{ platform, hotelInfo, … }`，后续步骤可用 `${hotelInfo.hotelInfo.hotelCode}`。
@@ -53,13 +51,8 @@
 |------|------|----------|
 | `navigate` | 打开/跳转 URL，注入监听 | 需要 `url` |
 | `call_api` | 在**当前页**上下文发 fetch（带 cookie） | 须先 `navigate`；用 `call_api_params` |
-| `call_bot` | 调我们 bot 接口生成文案（bot_code + content） | 不走商家页；结果写入 `_botResult` |
-| `call_backend` | 调我们后端统一入口，用 `type` 区分保存逻辑 | 不走商家页；`call_backend_params.type` + `payload` |
-| `dom_snapshot` | 扫描关键 DOM，生成可用 CSS `selector` 列表 | 须先 `navigate`；建议 `need_collect` + `event` |
+| `call_backend` | 调我们后端接口（保存、查询等） | 不走商家页；`call_backend_params.url` + `method` / `data` / `params` / `headers` |
 | `click` | 点击元素 | 须先 `navigate`；要 `selector` |
-| `input` | 输入框填值 | 须先 `navigate`；要 `selector` + `value` |
-| `text` | 读取元素文本 | 须先 `navigate`；要 `selector`；采集要 `need_collect` |
-| `check` | 勾选 checkbox | 须先 `navigate`；要 `selector` |
 | `loop` | 循环执行 `children` | 要 `children` + `max_count` |
 
 不支持上表以外的 `type`。
@@ -72,7 +65,7 @@
 |------|------|
 | `type` | 步骤类型（必填） |
 | `event` | 采集桶名 / 进度日志名。`need_collect: true` 时**强烈建议**设置；结束后引擎会检查 `collected[event]` 是否存在，没有则整步失败 |
-| `need_collect` | `true` 时本步必须采到数据（网络命中或 text 写入） |
+| `need_collect` | `true` 时本步必须采到数据（网络命中写入） |
 | `reg_exp` | 网络 URL 匹配（`urlMatch`）：逗号分隔为 **OR** 多规则，`*` 通配。监听命中与写入 `collected` 使用同一套规则。正式采集写稳定路径片段；探测可用 `"."` |
 | `global_variables` | 对象或数组。`{ name, url }`：URL 命中时把该请求的 req/res/headers/cookies 写入 `variables[name]`；`{ name, value }`：直接/表达式赋值 |
 | `allow_exception` | `true` 时本步失败不抛死，继续 |
@@ -215,49 +208,31 @@ variables.apiFoo = {
 
 ---
 
-## call_bot（循环里逐条生成，边看边回）
-
-走**我们自己的** `/agent/conversations/create` + `/agent/chat/completions`（和现网 `llmRequest` 同一套），不是商家接口，也不是任务结束后的 Agent `instruction`。
-
-只要 `bot_code` + `content`。`content` 可以是字符串或对象（对象会 `JSON.stringify`）。可选 `hotel_code`、`payload`。生成结果写入 `variables._botResult` 和 `variables[event]`，下一步 `call_api` 用 `"${_botResult}"` 当回复正文。
-
-```json
-{
-  "type": "call_bot",
-  "event": "gen_reply",
-  "call_bot_params": {
-    "bot_code": "CTRIP_REPLY",
-    "hotel_code": "${hotelCode}",
-    "content": {
-      "comment": "${listHit.response.commentlist[_i].content}",
-      "score": "${listHit.response.commentlist[_i].avgScore}"
-    }
-  }
-}
-```
-
-凭证：`chrome.storage.local.ourBackend = { baseUrl, accessToken, hotelCode }`，由客户端登录后写入。未配置会失败。
-
----
-
 ## call_backend（结果交给我们后端保存）
 
-扩展不写死「评论入库」字段。POST `{ type, payload }` 到 `/client/task/ingest`，后端按 `type` 分发。
+按普通 HTTP 请求描述：`url`（必填，相对后端 baseURL 的路径或完整 URL）、`method`（默认 `POST`）、`data`、`params`、`headers`、`timeout`。
+`url` 支持 `${expr}` 插值；`data` / `params` 支持 `${expr}` 与 `__ref`（同 `call_api_params`）。
 
 ```json
 {
   "type": "call_backend",
   "event": "save_comment",
   "call_backend_params": {
-    "type": "ctrip_comment_save",
-    "payload": {
-      "hotel_code": "${hotelCode}",
+    "url": "/client/comment/save",
+    "method": "POST",
+    "data": {
+      "hotel_code": "${hotelInfo.hotelInfo.hotelCode}",
       "comment_id": "${listHit.response.commentlist[_i].commentId}",
       "detail": "${detailHit.response}"
     }
   }
 }
 ```
+
+- 结果与 `call_api` 网络命中同一套写法：
+  - `global_variables: { name, url }`：`url` 匹配本次请求时，写入 `variables[name] = { url, method, headers, queryParams, payload, response, cookies }`（`response` 为后端返回体）
+  - `need_collect: true` + `event`：追加到 `collected[event].content`（设了 `reg_exp` 时需匹配本次 url）
+- 返回体 `code` 不为 200（`success` / `'1'` / `'200'` 视为 200）时本步失败；HTTP / 网络错误同样视为失败。
 
 ---
 
@@ -266,7 +241,7 @@ variables.apiFoo = {
 读接口：页面自加载或 `call_api` 即可拿到。  
 写接口（提交/保存）若从未被听包捕获过：
 
-1. 用 `click`/`input` **真实走通一次 UI 提交**
+1. 用 `click` **真实走通一次 UI 提交**
 2. 在提交那一步 `need_collect` + `reg_exp`（业务 API 路径片段）+ `global_variables`
 3. 落盘里的 `payload`/`headers` 即真实传参
 4. 再 `call_api` + `__ref` 复用；若有前端签名导致 call_api 失败，则对每条重复 UI 提交
@@ -275,85 +250,17 @@ variables.apiFoo = {
 
 ---
 
-## DOM：dom_snapshot（先拿 selector）
+## DOM：click
 
-**不知道要点哪个元素时**，先跑 `dom_snapshot`，再根据落盘结果写 `click`/`input`。
-
-```json
-{
-  "type": "dom_snapshot",
-  "event": "ui_map",
-  "need_collect": true,
-  "max_count": 80
-}
-```
-
-可选字段：
-
-| 字段 | 说明 |
-|------|------|
-| `selector` | 要扫描的元素查询（逗号多规则）。省略则默认：按钮/链接/输入/带 `he-click`/`data-testid` 等 + `h1`–`h3`/`label` |
-| `max_count` | 最多返回条数，默认 60，上限 200（优先可见/可点/有文案） |
-
-落盘 `value` 形态：
-
-```json
-{
-  "url": "https://…",
-  "title": "页面标题",
-  "count": 12,
-  "truncated": false,
-  "elements": [
-    {
-      "selector": "[he-click=\"reply_edit\"]",
-      "tag": "button",
-      "text": "回复",
-      "attrs": { "he-click": "reply_edit" },
-      "visible": true,
-      "clickable": true
-    }
-  ]
-}
-```
-
-用法：读 `elements[].text` / `attrs` 选目标 → 把对应 `selector` 填进下一轮 `click`/`input`。示例：`examples/dom-snapshot-then-click.json`。
-
----
-
-## DOM：click / input / text / check
-
-`click`/`input`：切换模块，或**触发一次写接口以便听包**；读列表/翻页优先 `call_api`。selector 未知时先 `dom_snapshot`。
+`click`：切换模块，或**触发一次写接口以便听包**；读列表/翻页优先 `call_api`。
 
 ```json
 { "type": "click", "selector": "button.submit, .btn-ok", "event": "click_submit" }
 ```
 
-```json
-{
-  "type": "input",
-  "selector": "input[name='q']",
-  "value": "关键词",
-  "event": "fill_q"
-}
-```
-
-```json
-{
-  "type": "text",
-  "selector": "h1.title",
-  "event": "page_title",
-  "need_collect": true
-}
-```
-
-```json
-{ "type": "check", "selector": "input[type=checkbox].agree" }
-```
-
 - `selector` 支持逗号多选，命中第一个存在的。
-- `text` + `need_collect` → `collected[event]` 为 `{ type: "text", value }`
-- `dom_snapshot` + `need_collect` → `collected[event]` 为 `{ type: "dom_snapshot", value }`
-- click/input 本身不写入 collected，除非另有网络监听。
+- `recycle_count`：连续点击次数（元素不可点时提前停止）。
+- click 本身不写入 collected，除非本步另有网络监听（`need_collect` + `reg_exp` / `global_variables`）。
 
 ---
 
@@ -392,11 +299,9 @@ variables.apiFoo = {
 1. **未知接口** → `navigate` + `reg_exp: "."` 探测
 2. **页面自加载接口** → `navigate` + 精确 `reg_exp` + `event`（可加 `global_variables`）
 3. **再请求 / 改参 / 翻页** → **`call_api`（优先）**，常用 `__ref`
-4. **要操作 UI 但 selector 未知** → `dom_snapshot` → 再 `click`/`input`
-5. **必须点 Tab/模块才出包** → `click`（在 click 步听包），然后再 `call_api` 如需要
-6. **只要 DOM 文案** → `text` + `need_collect`；或 `dom_snapshot` 看一批
-7. **多次翻页** → `loop` 包 `call_api`（优先于 loop 点按钮）
-8. **逐条生成回复** → navigate 先采列表接口模板 → 外层 loop `call_api` 翻页 → 内层 `call_bot` → `call_api` 提交 → 可选 `call_backend` 入库；不要等整单结束再靠 Agent instruction 写回复
+4. **必须点 Tab/模块才出包** → `click`（在 click 步听包），然后再 `call_api` 如需要
+5. **多次翻页** → `loop` 包 `call_api`（优先于 loop 点按钮）
+6. **逐条入库** → navigate 先采列表接口模板 → 外层 loop `call_api` 翻页 → 内层 `call_api` 拉详情 → `call_backend` 入库
 
 网络监听绑定**当前步骤**；click 后才发的 XHR，规则写在 click 步上。
 

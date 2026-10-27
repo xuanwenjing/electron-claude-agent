@@ -8,7 +8,10 @@
       "need_collect": true,
       "reg_exp": "getCommentList",
       "global_variables": [
-        { "name": "listHit", "url": "getCommentList" }
+        {
+          "name": "listHit",
+          "url": "getCommentList"
+        }
       ]
     },
     {
@@ -22,11 +25,16 @@
           "event": "comment_page",
           "need_collect": true,
           "reg_exp": "getCommentList",
-          "global_variables": { "name": "listHit", "url": "getCommentList" },
+          "global_variables": {
+            "name": "listHit",
+            "url": "getCommentList"
+          },
           "call_api_params": {
             "url": "https://ebooking.ctrip.com/restapi/soa2/26353/getCommentList",
             "method": "POST",
-            "headers": { "__ref": "${listHit.headers}" },
+            "headers": {
+              "__ref": "${listHit.headers}"
+            },
             "payload": {
               "__ref": "${listHit.payload}",
               "catalogTab": "NotFeedBack",
@@ -40,42 +48,20 @@
           "loop_index_var": "_i",
           "children": [
             {
-              "type": "call_bot",
-              "event": "gen_reply",
-              "call_bot_params": {
-                "bot_code": "CTRIP_REPLY",
-                "content": {
-                  "comment": "${listHit.response.commentlist[_i].content}",
-                  "score": "${listHit.response.commentlist[_i].avgScore}"
-                }
-              }
-            },
-            {
-              "type": "call_api",
-              "event": "reply",
-              "need_collect": true,
-              "reg_exp": "setCommentReply",
-              "call_api_params": {
-                "url": "https://ebooking.ctrip.com/restapi/soa2/26353/setCommentReply",
-                "method": "POST",
-                "headers": { "__ref": "${listHit.headers}" },
-                "payload": {
-                  "__ref": "${listHit.payload}",
-                  "commentid": "${listHit.response.commentlist[_i].commentId}",
-                  "content": "${_botResult}"
-                }
-              }
-            },
-            {
               "type": "call_api",
               "event": "detail",
               "need_collect": true,
               "reg_exp": "getCommentDetail",
-              "global_variables": { "name": "detailHit", "url": "getCommentDetail" },
+              "global_variables": {
+                "name": "detailHit",
+                "url": "getCommentDetail"
+              },
               "call_api_params": {
                 "url": "https://ebooking.ctrip.com/restapi/soa2/26353/getCommentDetail",
                 "method": "POST",
-                "headers": { "__ref": "${listHit.headers}" },
+                "headers": {
+                  "__ref": "${listHit.headers}"
+                },
                 "payload": {
                   "__ref": "${listHit.payload}",
                   "commentId": "${listHit.response.commentlist[_i].commentId}"
@@ -86,8 +72,9 @@
               "type": "call_backend",
               "event": "save_comment",
               "call_backend_params": {
-                "type": "ctrip_comment_save",
-                "payload": {
+                "url": "/client/comment/save",
+                "method": "POST",
+                "data": {
                   "comment_id": "${listHit.response.commentlist[_i].commentId}",
                   "detail": "${detailHit.response}"
                 }

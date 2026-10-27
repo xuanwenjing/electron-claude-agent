@@ -1,5 +1,5 @@
 /**
- * 对齐 wormhole taskExecutor + customCrawler（realClick / type / check / clickable）
+ * 对齐 wormhole taskExecutor + customCrawler（realClick / clickable）
  */
 
 export function sleep(ms: number): Promise<void> {
@@ -120,47 +120,6 @@ export function realClick(el: HTMLElement): boolean {
   return true;
 }
 
-export function triggerInputEvent(element: HTMLInputElement | HTMLTextAreaElement): void {
-  element.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new Event("blur", { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new Event("keyup", { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new Event("keydown", { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new Event("keypress", { bubbles: true, cancelable: true }));
-}
-
-/** 对齐 customCrawler.type（不含 React MAIN 桥，原生事件链已对齐） */
-export async function typeText(
-  selectorOrElement: string | Element,
-  text: string,
-): Promise<void> {
-  const element =
-    typeof selectorOrElement === "string"
-      ? await waitForSelector(selectorOrElement)
-      : selectorOrElement;
-  if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) {
-    throw new Error("type 仅支持输入框元素（input 或 textarea）");
-  }
-  element.focus();
-  element.value = text;
-  triggerInputEvent(element);
-}
-
-export async function checkCheckbox(
-  selectorOrElement: string | Element,
-  value: boolean,
-): Promise<void> {
-  const element =
-    typeof selectorOrElement === "string"
-      ? await waitForSelector(selectorOrElement)
-      : selectorOrElement;
-  if (!(element instanceof HTMLInputElement)) {
-    throw new Error("check 仅支持 input 元素");
-  }
-  element.checked = value;
-  triggerInputEvent(element);
-}
-
 export async function handleClickTask(opts: {
   selector?: string;
   recycle_count?: number;
@@ -189,36 +148,4 @@ export async function handleClickTask(opts: {
   const { element } = await getElement(selector, timeout);
   realClick(element as HTMLElement);
   return { success: true, data: "点击成功 1 次" };
-}
-
-export async function handleInputTask(opts: {
-  selector?: string;
-  value?: unknown;
-  timeout?: number;
-}): Promise<{ success: boolean; data?: string }> {
-  const { element } = await getElement(opts.selector || "", opts.timeout);
-  await typeText(element, String(opts.value ?? ""));
-  return { success: true, data: "input ok" };
-}
-
-export async function handleTextTask(opts: {
-  selector?: string;
-  timeout?: number;
-}): Promise<{ success: boolean; data?: string }> {
-  const { element } = await getElement(opts.selector || "", opts.timeout);
-  return {
-    success: true,
-    data: (element as HTMLElement).innerText || element.textContent || "",
-  };
-}
-
-export async function handleCheckTask(opts: {
-  selector?: string;
-  value?: unknown;
-  timeout?: number;
-}): Promise<{ success: boolean; data?: string }> {
-  const { element } = await getElement(opts.selector || "", opts.timeout);
-  const checked = opts.value === true || opts.value === "true" || opts.value === 1 || opts.value === "1";
-  await checkCheckbox(element, checked);
-  return { success: true, data: `checkbox[${checked}]选中成功` };
 }

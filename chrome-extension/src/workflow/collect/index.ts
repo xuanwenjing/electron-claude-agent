@@ -1,7 +1,6 @@
 export {
   createCollector,
   resolveEvent,
-  updateTextData,
   updateVariables,
   updateData,
   isDataComplete,

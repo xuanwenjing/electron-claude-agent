@@ -84,7 +84,6 @@ description: >
 - **抓取失败 → 只回报原因并结束**；成功才走 instruction / outputSchema。  
 - 不要擅自改用户的 `workflow` 步骤（除非用户要求修好再跑）。  
 - `instruction` / `outputSchema` 不得传给扩展当步骤字段；它们只在顶层。  
-- **逐条生成回复**用 workflow 里的 `call_bot`（bot_code + content），写在 loop 中、提交商家接口之前。不要把「边看边回」做成多轮 Skill。`instruction` 只负责整单结束后的 outputSchema。  
 - `call_backend` 把明细交给我们后端保存；Agent 回传的 outputSchema 仍是汇总信封，不要替代逐条入库。  
 - 成功时最终交付 = `outputSchema` 形状的 JSON + 工作区同次任务目录下的 `output.json`。  
 - 读写路径始终相对 **workspace**，绝不相对本 Skill 目录。

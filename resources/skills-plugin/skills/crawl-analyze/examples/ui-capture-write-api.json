@@ -13,12 +13,6 @@
       "allow_exception": true
     },
     {
-      "type": "input",
-      "selector": "textarea, .ant-input",
-      "value": "感谢您的反馈，我们会继续改进。",
-      "event": "fill_content"
-    },
-    {
       "type": "click",
       "selector": "[he-click='reply_submit'], button[type='submit'].ant-btn-primary",
       "event": "write_api",

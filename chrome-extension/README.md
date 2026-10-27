@@ -29,7 +29,7 @@ chrome-extension/
 │   │   ├── util/          # eval / urlMatch / cancel
 │   │   ├── browser/       # tabs + crawlWindow
 │   │   ├── api/           # callApi + pageFetch
-│   │   ├── ourBackend/    # call_bot + call_backend
+│   │   ├── ourBackend/    # call_backend
 │   │   └── collect/       # collector + networkCapture
 │   ├── content/
 │   ├── page/
@@ -59,5 +59,5 @@ MAIN 拦截 → content → `updateData` → `{ url, payload, response, method, 
 | 调我们 bot / 后端 | `workflow/ourBackend/` |
 | 类型 | `src/workflow/types.ts` |
 | 表达式 / `__ref` | `workflow/util/eval.ts`（MV3，无 `new Function`） |
-| DOM click/input/check | `src/content/dom.ts` |
+| DOM click | `src/content/dom.ts` |
 | 可取消等待 | `workflow/util/cancel.ts` |

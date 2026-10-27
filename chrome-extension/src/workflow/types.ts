@@ -1,13 +1,8 @@
 export type WorkflowStepType =
   | "navigate"
   | "call_api"
-  | "call_bot"
   | "call_backend"
   | "click"
-  | "text"
-  | "input"
-  | "check"
-  | "dom_snapshot"
   | "loop";
 
 export interface GlobalVariable {
@@ -25,21 +20,20 @@ export interface CallApiParam {
   mode?: string;
 }
 
-/** 调我们自己的 bot（/agent/conversations/create + /agent/chat/completions） */
-export interface CallBotParam {
-  bot_code: string;
-  content: unknown;
-  hotel_code?: string;
-  payload?: Record<string, unknown>;
-}
-
 /**
- * 调我们后端的统一入口。后端用 type 区分任务（评论入库、报表等），
- * 用 payload 做保存。不要把平台 API 写在这里——那是 call_api。
+ * 调我们后端接口（经 shared/request）。不要把平台 API 写在这里——那是 call_api。
  */
 export interface CallBackendParam {
-  type: string;
-  payload?: unknown;
+  /** 相对 Request baseURL 的路径或完整 URL，支持 ${expr} */
+  url: string;
+  /** 默认 POST */
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** 请求体，支持 ${expr} / __ref */
+  data?: unknown;
+  /** URL query，支持 ${expr} / __ref */
+  params?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  timeout?: number;
 }
 
 export interface WorkflowItem {
@@ -47,13 +41,11 @@ export interface WorkflowItem {
   name?: string;
   url?: string;
   selector?: string;
-  value?: unknown;
   event?: string;
   need_collect?: boolean;
   reg_exp?: string;
   global_variables?: GlobalVariable | GlobalVariable[];
   call_api_params?: CallApiParam | CallApiParam[];
-  call_bot_params?: CallBotParam;
   call_backend_params?: CallBackendParam;
   allow_exception?: boolean;
   pass_condition?: string;
@@ -93,11 +85,6 @@ export interface CollectedText {
   value: unknown;
 }
 
-export interface CollectedDomSnapshot {
-  type: "dom_snapshot";
-  value: unknown;
-}
-
 export interface CollectedArray {
   type: "array";
   content: unknown[];
@@ -112,7 +99,12 @@ export interface CollectedHotelInfo {
   value: Record<string, unknown>;
 }
 
-export type CollectedEntry = CollectedText | CollectedDomSnapshot | CollectedArray | CollectedHotelInfo;
+export interface CollectedObject {
+  type: "object";
+  value: Record<string, unknown>;
+}
+
+export type CollectedEntry = CollectedText | CollectedArray | CollectedHotelInfo | CollectedObject;
 
 export interface Collector {
   data: Record<string, CollectedEntry>;

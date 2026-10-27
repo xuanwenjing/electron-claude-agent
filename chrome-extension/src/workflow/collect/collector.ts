@@ -22,18 +22,6 @@ export function resolveEvent(
   return String(resolveMaybeExpr(collector.variables, raw));
 }
 
-export function updateTextData(
-  collector: Collector,
-  workflowItem: WorkflowItem,
-  text: unknown,
-): void {
-  if (!workflowItem.need_collect) return;
-  if (workflowItem.type !== "text" && workflowItem.type !== "dom_snapshot") return;
-  const event = resolveEvent(collector, workflowItem, workflowItem.type);
-  collector.data[event] = { type: workflowItem.type, value: text };
-  collector.variables[event] = text;
-}
-
 export function updateVariables(
   collector: Collector,
   workflowItem: WorkflowItem,
@@ -94,13 +82,7 @@ export function updateData(
     cookies,
   });
 
-  if (
-    !workflowItem.need_collect ||
-    workflowItem.type === "text" ||
-    workflowItem.type === "dom_snapshot"
-  ) {
-    return;
-  }
+  if (!workflowItem.need_collect) return;
   // 与 networkCapture / urlMatch 一致：逗号表示多规则 OR，不能整段 new RegExp
   if (workflowItem.reg_exp && !urlMatch(api, workflowItem.reg_exp)) return;
 
