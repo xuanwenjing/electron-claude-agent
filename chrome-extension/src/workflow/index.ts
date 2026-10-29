@@ -1,4 +1,6 @@
 export { runWorkflow } from "./runWorkflow";
+export { ADOPT_WAIT_MS, adoptStartupWindowAsCrawlWindow, isCrawlWindow } from "./browser";
+export { captureHotelInfoFromXhr } from "./hotelInfo";
 export { pageFetch, handleApiFetch } from "./api";
 export { handleCallBackend } from "./ourBackend";
 export {

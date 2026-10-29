@@ -1,5 +1,7 @@
 {
   "maxRetry": 2,
+  "platform": "ctripEbk",
+  "needLogin": true,
   "workflow": [
     {
       "type": "navigate",

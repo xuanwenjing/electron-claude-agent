@@ -8,6 +8,7 @@ import {
 } from "../../../src/shared/bridgeProtocol";
 import type { WorkflowConfig } from "../workflow";
 import { bindKeepAliveHooks, startKeepAlive, tickActiveKeepAlive } from "./keepAlive";
+import { minimizeBrowserWindows } from "./minimizeBrowser";
 import { isExtensionReloading, requestReloadExtension } from "./reloadExtension";
 import {
   bindTaskQueueSend,
@@ -122,6 +123,11 @@ export function connect(): void {
 
     if (msg.type === ToExtension.ReloadExtension) {
       void requestReloadExtension(msg.taskId || "", send);
+      return;
+    }
+
+    if (msg.type === ToExtension.MinimizeBrowser) {
+      void minimizeBrowserWindows();
       return;
     }
 

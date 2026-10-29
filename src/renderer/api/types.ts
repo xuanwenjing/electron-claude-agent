@@ -106,10 +106,14 @@ declare global {
       clearNotes: () => Promise<{ ok: true; deleted: number } | { ok: false; error: string }>;
     };
     crawlApi: {
-      getStatus: () => Promise<{ connected: boolean; port: number }>;
+      getStatus: () => Promise<{ connected: boolean; port: number; extensionDir: string }>;
+      revealExtensionDir: () => Promise<{ ok: true } | { ok: false; error: string }>;
       start: (
         config: unknown,
-      ) => Promise<{ ok: true; taskId: string } | { ok: false; error: string }>;
+      ) => Promise<
+        | { ok: true; taskId: string }
+        | { ok: false; error: string; taskId?: string; resultPath?: string | null }
+      >;
       reloadExtension: () => Promise<
         { ok: true; taskId: string } | { ok: false; error: string }
       >;

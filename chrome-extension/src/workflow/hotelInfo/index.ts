@@ -1,15 +1,16 @@
 /**
  * 对齐 wormhole content-common/matches/dataInjector：
- * navigate 结束后，若落在携程 EBK / 携程酒店页，在页面 MAIN world 提取酒店信息写入 collector
+ * navigate 结束后按平台取酒店信息写入 collector，同时给出登录态供 needLogin 校验：
+ * - 携程 EBK / 携程酒店：在页面 MAIN world 提取
+ * - 美团 / 飞猪 / 抖音：取页面接口被动捕获的数据（见 xhrHotelInfo）
  */
-import type { Collector, EmitFn, HotelPlatform } from "../types";
+import { PLATFORM_LABELS, detectPlatform, isLoginUrl } from "../platform";
+import { HotelPlatform, type Collector, type EmitFn } from "../types";
+import { getCachedHotelInfo, waitFreshHotelInfo } from "./xhrHotelInfo";
 
-export const HOTEL_INFO_KEY = "hotelInfo";
+export { captureHotelInfoFromXhr, getCachedHotelInfo } from "./xhrHotelInfo";
 
-const HOTEL_HOSTS: Record<string, HotelPlatform> = {
-  "ebooking.ctrip.com": "ctripEbk",
-  "hotels.ctrip.com": "ctripHotel",
-};
+export const HOTEL_INFO_KEY = "_hotelInfo";
 
 /**
  * 注入页面执行：必须自包含，不能引用外部变量。
@@ -98,11 +99,6 @@ function extractCtripHotelInfo() {
   };
 }
 
-export const PLATFORM_LABELS: Record<HotelPlatform, string> = {
-  ctripEbk: "携程EBK",
-  ctripHotel: "携程酒店",
-};
-
 /** 登录校验失败：重试无意义，runWorkflow 直接结束任务 */
 export class NotLoggedInError extends Error {
   constructor(message: string) {
@@ -111,30 +107,71 @@ export class NotLoggedInError extends Error {
   }
 }
 
-export function detectPlatform(url: string | undefined): HotelPlatform | null {
-  if (!url) return null;
-  try {
-    return HOTEL_HOSTS[new URL(url).host] ?? null;
-  } catch {
-    return null;
-  }
+export type HotelInfoResult = { platform: HotelPlatform; isLogin: boolean } | null;
+
+const XHR_HOTEL_INFO_WAIT_MS = 10000;
+
+function saveHotelInfo(
+  collector: Collector,
+  platform: HotelPlatform,
+  value: { hotelInfo?: { hotelName?: string; hotelCode?: string }; isLogin?: boolean } & Record<string, unknown>,
+  emit: EmitFn,
+  note = "",
+): void {
+  collector.variables[HOTEL_INFO_KEY] = { platform, ...value };
+  const { hotelName, hotelCode } = value.hotelInfo || {};
+  emit(
+    `已获取${PLATFORM_LABELS[platform]}酒店信息${note}: ${hotelName || "-"}（${hotelCode || "-"}）${value.isLogin ? "（已登录）" : "（未登录）"}`,
+  );
 }
 
-export type HotelInfoResult = { platform: HotelPlatform; isLogin: boolean } | null;
+/**
+ * 美团 / 飞猪 / 抖音：落在登录页即未登录；否则等本次导航后页面接口捕获的酒店信息，
+ * 超时则退回上一次缓存。
+ */
+async function collectXhrHotelInfo(
+  tabUrl: string | undefined,
+  platform: HotelPlatform,
+  collector: Collector,
+  emit: EmitFn,
+  navigatedAt: number,
+): Promise<HotelInfoResult> {
+  if (isLoginUrl(tabUrl, platform)) {
+    emit(`${PLATFORM_LABELS[platform]}未登录`);
+    return { platform, isLogin: false };
+  }
+  const fresh = await waitFreshHotelInfo(platform, navigatedAt, XHR_HOTEL_INFO_WAIT_MS);
+  const entry = fresh ?? (await getCachedHotelInfo(platform));
+  if (entry) {
+    saveHotelInfo(collector, platform, { ...entry.value, isLogin: true }, emit, fresh ? "" : "（缓存）");
+  } else {
+    emit(`未捕获到${PLATFORM_LABELS[platform]}酒店信息（页面未请求酒店信息接口）`);
+  }
+  return { platform, isLogin: true };
+}
 
 /**
  * 按标签当前 URL（含重定向后）判断平台，提取酒店信息写入
- * collector.data.hotelInfo 与 collector.variables.hotelInfo。
+ * collector.variables._hotelInfo。
  * 提取失败只记日志，不中断 workflow；不在已知平台页时返回 null。
+ * navigatedAt：本次 navigate 开始时间，用于区分接口捕获数据是否为本次页面产生。
  */
-export async function collectHotelInfo(tabId: number, collector: Collector, emit: EmitFn): Promise<HotelInfoResult> {
+export async function collectHotelInfo(
+  tabId: number,
+  collector: Collector,
+  emit: EmitFn,
+  navigatedAt = Date.now(),
+): Promise<HotelInfoResult> {
   const tab = await chrome.tabs.get(tabId);
   const platform = detectPlatform(tab.url);
   if (!platform) return null;
+  if (platform !== HotelPlatform.CtripEbk && platform !== HotelPlatform.CtripHotel) {
+    return collectXhrHotelInfo(tab.url, platform, collector, emit, navigatedAt);
+  }
 
   try {
     const [injection] =
-      platform === "ctripEbk"
+      platform === HotelPlatform.CtripEbk
         ? await chrome.scripting.executeScript({
             target: { tabId },
             world: "MAIN",
@@ -149,29 +186,35 @@ export async function collectHotelInfo(tabId: number, collector: Collector, emit
     const value = injection?.result;
     if (!value) throw new Error("页面未返回酒店信息");
 
-    collector.data[HOTEL_INFO_KEY] = { type: "hotel_info", platform, value };
-    collector.variables[HOTEL_INFO_KEY] = { platform, ...value };
-    const { hotelName, hotelCode } = (value.hotelInfo || {}) as { hotelName?: string; hotelCode?: string };
-    const isLogin = value.isLogin ?? false;
-    emit(`已获取${PLATFORM_LABELS[platform]}酒店信息: ${hotelName || "-"}（${hotelCode || "-"}）${isLogin ? "（已登录）" : "（未登录）"}`);
-    return { platform, isLogin };
+    saveHotelInfo(collector, platform, value, emit);
+    return { platform, isLogin: value.isLogin ?? false };
   } catch (err) {
     emit(`获取酒店信息失败(${platform}): ${err instanceof Error ? err.message : String(err)}`);
     return { platform, isLogin: false };
   }
 }
 
+type LoginConfig = { platform?: HotelPlatform; needLogin?: boolean };
+
 /**
  * config.needLogin 时，navigate 目标属于 config.platform 才校验：
  * 未登录被重定向到其他域名（如 passport 登录页）时 info 为 null，同样视为未登录。
+ * 返回缺登录的平台；无需登录或已登录返回 null。
  */
-export function assertLoggedIn(
-  config: { platform?: HotelPlatform; needLogin?: boolean },
+export function getMissingLoginPlatform(
+  config: LoginConfig,
   requestedUrl: string,
   info: HotelInfoResult,
-): void {
+): HotelPlatform | null {
   const { platform, needLogin } = config;
-  if (needLogin === false || !platform || detectPlatform(requestedUrl) !== platform) return;
-  if (info?.platform === platform && info.isLogin) return;
-  throw new NotLoggedInError(`${PLATFORM_LABELS[platform]}未登录，请先在浏览器中登录后再执行任务`);
+  if (needLogin === false || !platform || detectPlatform(requestedUrl) !== platform) return null;
+  if (info?.platform === platform && info.isLogin) return null;
+  return platform;
+}
+
+export function assertLoggedIn(config: LoginConfig, requestedUrl: string, info: HotelInfoResult, reason?: string): void {
+  const platform = getMissingLoginPlatform(config, requestedUrl, info);
+  if (!platform) return;
+  const detail = reason ? `（自动登录失败：${reason}）` : "";
+  throw new NotLoggedInError(`${PLATFORM_LABELS[platform]}未登录${detail}，请先在浏览器中登录后再执行任务`);
 }

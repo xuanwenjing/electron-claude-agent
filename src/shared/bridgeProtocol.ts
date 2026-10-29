@@ -13,6 +13,8 @@ export const ToExtension = {
   StartTask: "start_task",
   CancelTask: "cancel_task",
   ReloadExtension: "reload_extension",
+  /** 客户端拉起浏览器后，让扩展把浏览器窗口最小化 */
+  MinimizeBrowser: "minimize_browser",
   Ping: "ping",
 } as const;
 
@@ -36,8 +38,14 @@ export const TaskErrorCode = {
   WorkflowFailed: "WORKFLOW_FAILED",
   /** taskId 缺失、重复或不存在 */
   InvalidTask: "INVALID_TASK",
+  /** 任务标签页（或采集窗口）被关闭，且重试次数用尽 */
+  TabClosed: "TAB_CLOSED",
   /** 扩展正在重载，拒绝新的重载请求 */
   ExtensionReloading: "EXTENSION_RELOADING",
+  /** 客户端侧：浏览器 / 扩展未能连上 bridge，任务未下发 */
+  ExtensionNotConnected: "EXTENSION_NOT_CONNECTED",
+  /** 客户端侧：任务执行中扩展断开（浏览器被关闭等） */
+  ExtensionDisconnected: "EXTENSION_DISCONNECTED",
   Unknown: "UNKNOWN",
 } as const;
 
@@ -47,6 +55,7 @@ export type ToExtensionMessage =
   | { type: typeof ToExtension.StartTask; taskId: string; config: unknown; priority?: number }
   | { type: typeof ToExtension.CancelTask; taskId?: string }
   | { type: typeof ToExtension.ReloadExtension; taskId: string }
+  | { type: typeof ToExtension.MinimizeBrowser }
   | { type: typeof ToExtension.Ping };
 
 export type TaskProgressMessage = {

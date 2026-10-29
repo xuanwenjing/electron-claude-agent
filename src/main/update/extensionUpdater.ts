@@ -9,7 +9,7 @@ type RemoteExtensionInfo = { version: string; url: string };
 
 export type ExtensionUpdateResult =
   | { ok: true; updated: false; version: string | null; message: string }
-  | { ok: true; updated: true; version: string; reloadSent: boolean }
+  | { ok: true; updated: true; version: string; previousVersion: string | null; reloadSent: boolean }
   | { ok: false; error: string };
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -97,7 +97,10 @@ async function swapInNewDir(): Promise<void> {
   await rmDir(oldDir);
 }
 
-/** 启动时调用：固定目录不存在，或安装包内版本更高时，用安装包内版本覆盖 */
+/**
+ * 启动时调用：固定目录不存在，或安装包内版本更高时，用安装包内版本覆盖。
+ * 开发态版本号不变，每次启动都用 chrome-extension/dist 覆盖。
+ */
 export async function ensureExtensionInstalled(): Promise<string> {
   const target = getInstalledExtensionDir();
   await recoverInterruptedSwap();
@@ -110,7 +113,7 @@ export async function ensureExtensionInstalled(): Promise<string> {
   }
 
   const installedVersion = readManifestVersion(target);
-  if (installedVersion && compareVersions(bundledVersion, installedVersion) <= 0) {
+  if (app.isPackaged && installedVersion && compareVersions(bundledVersion, installedVersion) <= 0) {
     return target;
   }
 
@@ -197,15 +200,9 @@ async function runRemoteUpdate(): Promise<ExtensionUpdateResult> {
       await rmDir(siblingDir("new"));
     }
     const reloadSent = requestReload();
-    console.log(
-      `[ext-update] ${installedVersion ?? "(无)"} → ${remote.version}，` +
-        (reloadSent ? "已发送 reload_extension" : "扩展未连接，连上后再发送 reload_extension"),
-    );
-    return { ok: true, updated: true, version: remote.version, reloadSent };
+    return { ok: true, updated: true, version: remote.version, previousVersion: installedVersion, reloadSent };
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    console.error("[ext-update] 更新失败:", error);
-    return { ok: false, error };
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

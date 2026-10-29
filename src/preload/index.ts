@@ -59,8 +59,10 @@ export type UpdateStatusEvent = {
 };
 
 contextBridge.exposeInMainWorld("crawlApi", {
-  getStatus: (): Promise<{ connected: boolean; port: number }> =>
+  getStatus: (): Promise<{ connected: boolean; port: number; extensionDir: string }> =>
     ipcRenderer.invoke("crawl:getStatus"),
+  revealExtensionDir: (): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke("crawl:revealExtensionDir"),
   start: (
     config: unknown,
   ): Promise<{ ok: true; taskId: string } | { ok: false; error: string }> =>

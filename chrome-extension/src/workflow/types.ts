@@ -68,8 +68,10 @@ export interface WorkflowConfig {
   workflow?: WorkflowItem[];
   /** 任务所属平台；配合 needLogin 校验登录态 */
   platform?: HotelPlatform;
-  /** true 时：navigate 到 platform 对应站点后必须已登录，否则任务直接失败（不重试） */
+  /** true 时：navigate 到 platform 对应站点后必须已登录，未登录先尝试自动登录，仍失败则任务直接失败（不重试） */
   needLogin?: boolean;
+  /** 自动登录用的账号（飞猪需要先输入账号，未配置时用之前捕获的账号昵称；密码始终取浏览器密码管理器） */
+  loginAccount?: string;
 }
 
 export interface CollectedText {
@@ -82,7 +84,15 @@ export interface CollectedArray {
   content: unknown[];
 }
 
-export type HotelPlatform = "ctripEbk" | "ctripHotel";
+export const HotelPlatform = {
+  CtripEbk: "ctripEbk",
+  CtripHotel: "ctripHotel",
+  Meituan: "meituan",
+  Douyin: "douyin",
+  Fliggy: "fliggy",
+} as const;
+
+export type HotelPlatform = (typeof HotelPlatform)[keyof typeof HotelPlatform];
 
 /** navigate 到携程 EBK / 携程酒店后自动写入 collected.hotelInfo */
 export interface CollectedHotelInfo {

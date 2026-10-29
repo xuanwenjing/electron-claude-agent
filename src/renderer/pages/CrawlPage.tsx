@@ -31,6 +31,8 @@ export function CrawlPage() {
   const reloadExtension = useCrawlStore((s) => s.reloadExtension);
   const refreshResults = useCrawlStore((s) => s.refreshResults);
   const openXiaohongshu = useCrawlStore((s) => s.openXiaohongshu);
+  const extensionDir = useCrawlStore((s) => s.extensionDir);
+  const revealExtensionDir = useCrawlStore((s) => s.revealExtensionDir);
 
   return (
     <div className="space-y-4">
@@ -40,8 +42,7 @@ export function CrawlPage() {
             <div>
               <CardTitle>Chrome 抓取</CardTitle>
               <CardDescription>
-                扩展执行 workflow → 本客户端入库。加载{" "}
-                <code className="rounded bg-muted px-1">chrome-extension/dist/</code>
+                扩展执行 workflow → 本客户端入库
               </CardDescription>
             </div>
             <Badge variant={connected ? "success" : "danger"}>
@@ -50,6 +51,27 @@ export function CrawlPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {!connected && extensionDir ? (
+            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
+              <p className="text-muted-foreground">
+                扩展未连接。在 Edge 打开 <code className="rounded bg-muted px-1">edge://extensions</code>
+                ，开启「开发人员模式」，点「加载解压缩的扩展」，选择以下目录：
+              </p>
+              <p className="break-all font-mono text-xs">{extensionDir}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => void revealExtensionDir()}>
+                  打开扩展目录
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void navigator.clipboard.writeText(extensionDir)}
+                >
+                  复制路径
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <label className="text-sm font-medium" htmlFor="crawlConfig">
             抓取配置 JSON
           </label>
@@ -60,8 +82,8 @@ export function CrawlPage() {
             onChange={(e) => setConfigText(e.target.value)}
           />
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void start()} disabled={starting || !connected}>
-              {starting ? "下发中…" : "开始抓取"}
+            <Button onClick={() => void start()} disabled={starting}>
+              {starting ? (connected ? "下发中…" : "启动 Edge 中…") : "开始抓取"}
             </Button>
             <Button
               variant="secondary"

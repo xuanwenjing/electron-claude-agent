@@ -27,7 +27,14 @@ import {
   clearNetworkCaptureContext,
   setNetworkCaptureContext,
 } from "./collect";
-import { NotLoggedInError, assertLoggedIn, collectHotelInfo } from "./hotelInfo";
+import { tryAutoLogin } from "./autoLogin";
+import {
+  NotLoggedInError,
+  assertLoggedIn,
+  collectHotelInfo,
+  getMissingLoginPlatform,
+  type HotelInfoResult,
+} from "./hotelInfo";
 import type { CancelToken } from "./util";
 import { TaskCancelledError, cancellableSleep, resolveMaybeExpr, safeEval } from "./util";
 import { TaskErrorCode } from "../../../src/shared/bridgeProtocol";
@@ -58,6 +65,7 @@ export async function runWorkflow(
 ): Promise<WorkflowResult> {
   const maxRetry = Math.max(1, Number(config.maxRetry) || 3);
   let lastError: string | null = null;
+  let lastErrorCode: TaskErrorCode = TaskErrorCode.WorkflowFailed;
 
   for (let attempt = 1; attempt <= maxRetry; attempt++) {
     if (token?.cancelled) {
@@ -67,12 +75,26 @@ export async function runWorkflow(
     const collector = createCollector();
     let windowId: number | null = null;
     let tabId: number | null = null;
+    /** 任务标签页 / 采集窗口被关闭：立即结束本次尝试，进入重试（重新建窗口和标签页） */
+    let closedTabId: number | null = null;
+    const onTabRemoved = (id: number) => {
+      if (id === tabId) closedTabId = id;
+    };
+    chrome.tabs.onRemoved.addListener(onTabRemoved);
+    const stepToken: CancelToken = {
+      get cancelled() {
+        return !!token?.cancelled || closedTabId != null;
+      },
+      cancel: () => token?.cancel(),
+    };
     try {
       emit(`第 ${attempt}/${maxRetry} 次尝试`);
       const workflow = Array.isArray(config.workflow) ? config.workflow : [];
       if (!workflow.length) throw new Error("workflow 为空");
 
-      windowId = await getOrCreateCrawlWindow();
+      const crawlWindow = await getOrCreateCrawlWindow();
+      windowId = crawlWindow.windowId;
+      emit(crawlWindow.note);
       // 对齐 createTaskStore：任务开始先建空白工作标签，一任务绑定一标签
       const blank = await acquireCrawlTab(windowId);
       tabId = blank.id!;
@@ -80,7 +102,7 @@ export async function runWorkflow(
       emit(`采集窗口 windowId=${windowId}，任务标签 tabId=${tabId}（首标签保活；结束后关闭任务标签）`);
 
       const runStep = async (workflowItem: WorkflowItem): Promise<void> => {
-        if (token?.cancelled) throw new TaskCancelledError();
+        if (stepToken.cancelled) throw new TaskCancelledError();
         emit(`步骤 ${workflowItem.type}: ${workflowItem.event || ""}`);
         bindCapture(tabId, workflowItem, collector, emit);
 
@@ -90,19 +112,35 @@ export async function runWorkflow(
           emit(`正在打开任务采集页面: ${url}`);
 
           if (tabId == null) throw new Error("任务标签未创建");
-          const navigated = await navigateCrawlTab(tabId, url);
-          tabId = navigated.id!;
-          bindCapture(tabId, workflowItem, collector, emit);
+          const openPage = async (): Promise<HotelInfoResult> => {
+            const navigatedAt = Date.now();
+            const navigated = await navigateCrawlTab(tabId!, url);
+            tabId = navigated.id!;
+            bindCapture(tabId, workflowItem, collector, emit);
+            await waitTabComplete(tabId, emit);
+            await ensureContentReady(tabId);
+            await ensurePageFetchProxy(tabId);
+            return collectHotelInfo(tabId, collector, emit, navigatedAt);
+          };
 
-          await waitTabComplete(tabId, emit);
-          await ensureContentReady(tabId);
-          await ensurePageFetchProxy(tabId);
-          const hotelInfo = await collectHotelInfo(tabId, collector, emit);
-          assertLoggedIn(config, url, hotelInfo);
-          await runDefaultWait(workflowItem, 15000, 3000, token);
+          let hotelInfo = await openPage();
+          let autoLoginError: string | undefined;
+          const missingLogin = getMissingLoginPlatform(config, url, hotelInfo);
+          if (missingLogin) {
+            const login = await tryAutoLogin(tabId, missingLogin, emit, { account: config.loginAccount });
+            if (login.success) {
+              emit("自动登录成功，重新打开任务采集页面");
+              hotelInfo = await openPage();
+            } else {
+              autoLoginError = login.errorMessage;
+              emit(`自动登录失败: ${login.errorMessage}`);
+            }
+          }
+          assertLoggedIn(config, url, hotelInfo, autoLoginError);
+          await runDefaultWait(workflowItem, 15000, 3000, stepToken);
         } else if (workflowItem.type === "call_api") {
-          await handleApiFetch(tabId, collector, workflowItem, emit, token);
-          await runDefaultWait(workflowItem, 5000, 3000, token);
+          await handleApiFetch(tabId, collector, workflowItem, emit, stepToken);
+          await runDefaultWait(workflowItem, 5000, 3000, stepToken);
         } else if (workflowItem.type === "call_backend") {
           await handleCallBackend(collector, workflowItem, emit);
         } else if (workflowItem.type === "click") {
@@ -115,7 +153,7 @@ export async function runWorkflow(
               throw new Error(commonTaskRes?.errorMessage || "click 失败");
             }
           }
-          await runDefaultWait(workflowItem, 10000, 3000, token);
+          await runDefaultWait(workflowItem, 10000, 3000, stepToken);
         } else if (workflowItem.type === "loop") {
           await runLoop(workflowItem);
           return;
@@ -127,7 +165,7 @@ export async function runWorkflow(
           await removeTabByUrlInWindow(windowId, workflowItem.close_tab_before_finish);
         }
         if (workflowItem.wait_before_finish != null) {
-          await cancellableSleep(Number(workflowItem.wait_before_finish), token);
+          await cancellableSleep(Number(workflowItem.wait_before_finish), stepToken);
         }
 
         const complete = await isDataComplete(collector, workflowItem, tabId);
@@ -166,7 +204,7 @@ export async function runWorkflow(
         const indexVar = loopItem.loop_index_var || "_loopIndex";
         emit(`循环最大次数 max_count=${maxCount}`);
         for (let i = 0; i < maxCount; i++) {
-          if (token?.cancelled) throw new TaskCancelledError();
+          if (stepToken.cancelled) throw new TaskCancelledError();
           collector.variables[indexVar] = i;
           emit(`循环 ${i + 1}/${maxCount}, ${indexVar}=${i}`);
           for (const child of children) {
@@ -209,21 +247,28 @@ export async function runWorkflow(
         },
       };
     } catch (err) {
-      if (err instanceof TaskCancelledError || token?.cancelled) {
+      if (token?.cancelled || (err instanceof TaskCancelledError && closedTabId == null)) {
         emit("任务已取消");
         return { ok: false, error: "任务已取消", errorCode: TaskErrorCode.Cancelled, data: null };
       }
-      if (err instanceof NotLoggedInError) {
+      if (closedTabId == null && err instanceof NotLoggedInError) {
         emit(err.message);
         return { ok: false, error: err.message, errorCode: TaskErrorCode.NotLoggedIn, data: null };
       }
-      lastError = err instanceof Error ? err.message : String(err);
-      emit(`失败(${attempt}/${maxRetry}): ${lastError}`);
+      if (closedTabId != null) {
+        lastError = `任务标签页被关闭（tabId=${closedTabId}）`;
+        lastErrorCode = TaskErrorCode.TabClosed;
+      } else {
+        lastError = err instanceof Error ? err.message : String(err);
+        lastErrorCode = TaskErrorCode.WorkflowFailed;
+      }
+      emit(`失败(${attempt}/${maxRetry}): ${lastError}${attempt < maxRetry ? "，重新打开标签页重试" : ""}`);
       if (attempt < maxRetry) await cancellableSleep(1000 * attempt, token);
     } finally {
+      chrome.tabs.onRemoved.removeListener(onTabRemoved);
       clearNetworkCaptureContext();
       // 对齐 stopCrawlTask：关掉任务绑定的工作标签
-      if (tabId != null) {
+      if (tabId != null && closedTabId == null) {
         emit(`关闭任务标签 tabId=${tabId}`);
         await removeTab(tabId);
         tabId = null;
@@ -231,5 +276,5 @@ export async function runWorkflow(
     }
   }
 
-  return { ok: false, error: lastError || "未知错误", errorCode: TaskErrorCode.WorkflowFailed, data: null };
+  return { ok: false, error: lastError || "未知错误", errorCode: lastErrorCode, data: null };
 }

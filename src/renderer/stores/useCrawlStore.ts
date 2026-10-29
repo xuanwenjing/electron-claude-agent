@@ -7,6 +7,8 @@ import { useNotesStore } from "./useNotesStore";
 type CrawlState = {
   connected: boolean;
   port: number;
+  /** 浏览器「加载解压缩的扩展」应选择的目录 */
+  extensionDir: string;
   configText: string;
   results: CrawlResultRow[];
   logs: LogLine[];
@@ -21,6 +23,7 @@ type CrawlState = {
   start: () => Promise<void>;
   reloadExtension: () => Promise<void>;
   openXiaohongshu: () => Promise<void>;
+  revealExtensionDir: () => Promise<void>;
 };
 
 let unsubs: Array<() => void> = [];
@@ -28,6 +31,7 @@ let unsubs: Array<() => void> = [];
 export const useCrawlStore = create<CrawlState>((set, get) => ({
   connected: false,
   port: BRIDGE_PORT,
+  extensionDir: "",
   configText: JSON.stringify(SAMPLE_CRAWL_CONFIG, null, 2),
   results: [],
   logs: [],
@@ -65,7 +69,9 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
         void useNotesStore.getState().refresh();
       }),
     ];
-    void window.crawlApi.getStatus().then(({ connected, port }) => set({ connected, port }));
+    void window.crawlApi
+      .getStatus()
+      .then(({ connected, port, extensionDir }) => set({ connected, port, extensionDir }));
     void get().refreshResults();
     set({ inited: true });
   },
@@ -94,7 +100,7 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
     try {
       const res = await window.crawlApi.start(config);
       if (!res.ok) {
-        get().appendLog("error", res.error);
+        get().appendLog("error", res.resultPath ? `${res.error}，已保存 ${res.resultPath}` : res.error);
         return;
       }
       get().appendLog("log", `已下发抓取任务 ${res.taskId}`);
@@ -127,5 +133,10 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
       return;
     }
     get().appendLog("log", "已用 Google Chrome 打开 https://www.xiaohongshu.com");
+  },
+
+  revealExtensionDir: async () => {
+    const res = await window.crawlApi.revealExtensionDir();
+    if (!res.ok) get().appendLog("error", `打开扩展目录失败: ${res.error}`);
   },
 }));

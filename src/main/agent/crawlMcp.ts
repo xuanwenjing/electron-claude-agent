@@ -5,11 +5,11 @@ import { z } from "zod";
 
 import {
   cancelCrawlTask,
-  isExtensionConnected,
   startCrawlTask,
   waitForCrawlResult,
   type CrawlWaitOutcome,
 } from "../crawl/bridgeServer";
+import { ensureExtensionConnected } from "../crawl/edgeBrowser";
 import { BRIDGE_WS_URL } from "../../shared/bridgeProtocol";
 import { listCrawlResults } from "../db";
 import { ensureWorkspaceDir } from "../paths";
@@ -87,7 +87,7 @@ function parseWorkflowConfig(
 const workflowConfigField = z
   .union([z.record(z.string(), z.any()), z.string()])
   .describe(
-    "WorkflowConfig 对象（推荐）。抓取字段：maxRetry、workflow，可选 platform（ctripEbk | ctripHotel）+ needLogin（navigate 到该平台后校验登录，未登录直接失败）；会写入 crawl/<时间_短id>/config.json。也可传同等内容的 JSON 字符串。",
+    "WorkflowConfig 对象（推荐）。抓取字段：maxRetry、workflow，可选 platform（ctripEbk | ctripHotel | meituan | douyin | fliggy）+ needLogin（navigate 到该平台后校验登录，未登录先尝试自动登录，仍未登录直接失败）+ loginAccount（飞猪自动登录账号）；会写入 crawl/<时间_短id>/config.json。也可传同等内容的 JSON 字符串。",
   );
 
 function previewValue(value: unknown): unknown {
@@ -262,15 +262,9 @@ const startCrawl = tool(
     priority: z.number().optional().describe("队列优先级，数字越小越靠前；可选"),
   },
   async (args) => {
-    if (!isExtensionConnected()) {
-      return textResult(
-        {
-          ok: false,
-          error:
-            `Chrome 扩展未连接。请先加载扩展并确保已连上 ${BRIDGE_WS_URL}`,
-        },
-        true,
-      );
+    const connected = await ensureExtensionConnected();
+    if (!connected.ok) {
+      return textResult({ ok: false, error: `${connected.error}（bridge: ${BRIDGE_WS_URL}）` }, true);
     }
     const parsed = parseWorkflowConfig(args.config);
     if (!parsed.ok) return textResult({ ok: false, error: parsed.error }, true);
@@ -348,15 +342,9 @@ const runCrawl = tool(
     priority: z.number().optional().describe("队列优先级，数字越小越靠前；可选"),
   },
   async (args) => {
-    if (!isExtensionConnected()) {
-      return textResult(
-        {
-          ok: false,
-          error:
-            `Chrome 扩展未连接。请先加载扩展并确保已连上 ${BRIDGE_WS_URL}`,
-        },
-        true,
-      );
+    const connected = await ensureExtensionConnected();
+    if (!connected.ok) {
+      return textResult({ ok: false, error: `${connected.error}（bridge: ${BRIDGE_WS_URL}）` }, true);
     }
     const parsed = parseWorkflowConfig(args.config);
     if (!parsed.ok) return textResult({ ok: false, error: parsed.error }, true);

@@ -6,19 +6,29 @@ export async function waitTabComplete(tabId: number, emit: (message: string) => 
   const tab = await chrome.tabs.get(tabId);
   if (tab.status === "complete") return;
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const cleanup = () => {
+      clearTimeout(timer);
       chrome.tabs.onUpdated.removeListener(listener);
+      chrome.tabs.onRemoved.removeListener(onRemoved);
+    };
+    const timer = setTimeout(() => {
+      cleanup();
       emit(`等待页面加载超时，tabId=${tabId}`);
-      resolve()
+      resolve();
     }, 60000);
     function listener(id: number, info: { status?: string }) {
       if (id === tabId && info.status === "complete") {
-        clearTimeout(timer);
-        chrome.tabs.onUpdated.removeListener(listener);
+        cleanup();
         resolve();
       }
     }
+    function onRemoved(id: number) {
+      if (id !== tabId) return;
+      cleanup();
+      reject(new Error(`任务标签页已关闭，tabId=${tabId}`));
+    }
     chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.onRemoved.addListener(onRemoved);
   });
 }
 
@@ -54,6 +64,9 @@ export async function sendContentTask(
 }
 
 export {
+  ADOPT_WAIT_MS,
+  adoptStartupWindowAsCrawlWindow,
+  isCrawlWindow,
   getOrCreateCrawlWindow,
   acquireCrawlTab,
   navigateCrawlTab,

@@ -6,8 +6,9 @@
 {
   maxRetry?: number;          // 整单失败重试次数，默认按引擎约 3
   workflow: WorkflowItem[];   // 必填，顺序执行（扩展执行）
-  platform?: "ctripEbk" | "ctripHotel"; // 任务所属平台（携程EBK / 携程酒店）
-  needLogin?: boolean;        // true：navigate 到 platform 站点后校验登录态，未登录直接失败、不重试
+  platform?: "ctripEbk" | "ctripHotel" | "meituan" | "douyin" | "fliggy"; // 任务所属平台
+  needLogin?: boolean;        // true：navigate 到 platform 站点后校验登录态；未登录先自动登录（依赖浏览器已保存密码，携程酒店不支持），仍未登录则直接失败、不重试
+  loginAccount?: string;      // 自动登录账号（飞猪必填）
 }
 ```
 
@@ -34,10 +35,11 @@
 }
 ```
 
-- 酒店信息（自动）：`navigate` 落到携程 EBK（`ebooking.ctrip.com`）或携程酒店（`hotels.ctrip.com`）后，引擎自动写入
-  `collected.hotelInfo` = `{ "type": "hotel_info", "platform": "ctripEbk" | "ctripHotel", "value": { hotelInfo, … } }`，
+- 酒店信息（自动）：`navigate` 落到携程 EBK（`ebooking.ctrip.com`）、携程酒店（`hotels.ctrip.com`）、美团（`me.meituan.com`）、抖音（`life.douyin.com`）或飞猪（`hotel.fliggy.com`）后，引擎自动写入
+  `collected.hotelInfo` = `{ "type": "hotel_info", "platform": "ctripEbk" | "ctripHotel" | "meituan" | "douyin" | "fliggy", "value": { hotelInfo, … } }`，
   同时 `variables.hotelInfo` = `{ platform, hotelInfo, … }`，后续步骤可用 `${hotelInfo.hotelInfo.hotelCode}`。
   EBK 的 `value` 含 `hotelInfo` / `userInfo`；携程酒店含 `hotelInfo` / `ibuHotelData` / `newIbuHotelData`。获取失败只记日志不中断。
+  美团 / 飞猪 / 抖音取自页面自己请求的酒店接口（navigate 后最多等 10s，未等到则用上次缓存），`value` 含 `hotelInfo`（`hotelName` / `hotelCode` + 平台原始字段）与 `isGroup`（多门店）。
 
 ---
 

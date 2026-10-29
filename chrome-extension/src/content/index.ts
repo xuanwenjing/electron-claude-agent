@@ -6,6 +6,7 @@
 import { PAGE_FETCH_SOURCE, XHR_RESPONSE_TYPE } from "../shared/constants";
 import type { WorkflowItem } from "../workflow/types";
 import { handleClickTask } from "./dom";
+import { mountCrawlOverlay } from "./overlay";
 
 declare global {
   interface Window {
@@ -16,6 +17,7 @@ declare global {
 function main(): void {
   if (window.__crawlBridgeContent) return;
   window.__crawlBridgeContent = true;
+  void mountCrawlOverlay();
 
   const pendingFetch = new Map<
     string,
