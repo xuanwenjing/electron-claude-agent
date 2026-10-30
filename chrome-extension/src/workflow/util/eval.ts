@@ -43,6 +43,8 @@ export function safeEval(context: Record<string, unknown> | null | undefined, ex
 
   let i = 0;
   const tokens = tokenize(s);
+  /** >0 时只消费 token 不求值：短路掉的 || / && 右侧、三元未选中的分支 */
+  let skipping = 0;
 
   function consume(v: string): boolean {
     if (tokens[i] && tokens[i].value === v) {
@@ -52,6 +54,15 @@ export function safeEval(context: Record<string, unknown> | null | undefined, ex
     return false;
   }
 
+  function skip(parse: () => unknown): void {
+    skipping++;
+    try {
+      parse();
+    } finally {
+      skipping--;
+    }
+  }
+
   function parseExpression(): unknown {
     return parseTernary();
   }
@@ -59,23 +70,32 @@ export function safeEval(context: Record<string, unknown> | null | undefined, ex
   function parseTernary(): unknown {
     const left = parseLogicalOr();
     if (consume("?")) {
-      const yes = parseTernary();
+      let result: unknown;
+      if (left) result = parseTernary();
+      else skip(parseTernary);
       consume(":");
-      const no = parseTernary();
-      return left ? yes : no;
+      if (left) skip(parseTernary);
+      else result = parseTernary();
+      return result;
     }
     return left;
   }
 
   function parseLogicalOr(): unknown {
     let left = parseLogicalAnd();
-    while (consume("||")) left = left || parseLogicalAnd();
+    while (consume("||")) {
+      if (left) skip(parseLogicalAnd);
+      else left = parseLogicalAnd();
+    }
     return left;
   }
 
   function parseLogicalAnd(): unknown {
     let left = parseComparison();
-    while (consume("&&")) left = left && parseComparison();
+    while (consume("&&")) {
+      if (!left) skip(parseComparison);
+      else left = parseComparison();
+    }
     return left;
   }
 
@@ -133,6 +153,15 @@ export function safeEval(context: Record<string, unknown> | null | undefined, ex
       consume(")");
       return parseAccess(val);
     }
+    if (token.value === "[") {
+      const items: unknown[] = [];
+      if (tokens[i] && tokens[i].value !== "]") {
+        items.push(parseExpression());
+        while (consume(",")) items.push(parseExpression());
+      }
+      consume("]");
+      return parseAccess(items);
+    }
 
     let val: unknown;
     if (token.type === "number") val = token.value;
@@ -153,6 +182,22 @@ export function safeEval(context: Record<string, unknown> | null | undefined, ex
   }
 
   function parseAccess(val: unknown): unknown {
+    if (skipping) {
+      while (true) {
+        if (consume("?.") || consume(".")) i++;
+        else if (consume("[")) {
+          parseExpression();
+          consume("]");
+        } else if (consume("(")) {
+          if (tokens[i] && tokens[i].value !== ")") {
+            parseExpression();
+            while (consume(",")) parseExpression();
+          }
+          consume(")");
+        } else break;
+      }
+      return undefined;
+    }
     while (true) {
       if (consume("?.")) {
         const token = tokens[i++];

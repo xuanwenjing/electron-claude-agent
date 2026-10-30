@@ -6,6 +6,7 @@
  */
 import { PLATFORM_LABELS, detectPlatform, isLoginUrl } from "../platform";
 import { HotelPlatform, type Collector, type EmitFn } from "../types";
+import { setVariable } from "../variables";
 import { getCachedHotelInfo, waitFreshHotelInfo } from "./xhrHotelInfo";
 
 export { captureHotelInfoFromXhr, getCachedHotelInfo } from "./xhrHotelInfo";
@@ -118,7 +119,7 @@ function saveHotelInfo(
   emit: EmitFn,
   note = "",
 ): void {
-  collector.variables[HOTEL_INFO_KEY] = { platform, ...value };
+  setVariable(collector, HOTEL_INFO_KEY, { platform, ...value });
   const { hotelName, hotelCode } = value.hotelInfo || {};
   emit(
     `已获取${PLATFORM_LABELS[platform]}酒店信息${note}: ${hotelName || "-"}（${hotelCode || "-"}）${value.isLogin ? "（已登录）" : "（未登录）"}`,

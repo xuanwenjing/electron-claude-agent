@@ -204,6 +204,7 @@ async function execute(item: QueuedTask): Promise<void> {
         config,
         (message) => sendFn({ type: ToClient.TaskProgress, taskId, message }),
         token,
+        taskId,
       ),
       timeoutPromise,
     ]);

@@ -1,9 +1,8 @@
 import { AbortError, query } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 
-import { crawlMcpServer } from "./crawlMcp";
-import { ensureWorkspaceDir, getPythonExecutable, getSkillsPluginDir } from "../paths";
-import { pythonMcpServer, withBundledPython } from "./pythonMcp";
+import { getPythonExecutable } from "../paths";
+import { createPythonSession, withBundledPython } from "./pythonMcp";
 import { resolveClaudeCli } from "./resolveClaudeCli";
 
 export interface AgentProgressEvent {
@@ -14,6 +13,12 @@ export interface AgentProgressEvent {
 export interface RunAgentOptions {
   prompt: string;
   model?: string;
+  /** 追加在 Claude Code 默认系统提示词之后 */
+  systemPrompt?: string;
+  /** Skill 插件目录 */
+  pluginDirs?: string[];
+  /** 工作目录（cwd、文件读写边界、Python 工作目录）；并行的 Agent 各用各的 */
+  workDir: string;
   abortController?: AbortController;
   onEvent: (event: AgentProgressEvent) => void;
 }
@@ -43,67 +48,26 @@ function summarizePayload(value: unknown, max = 1200): string {
 }
 
 /**
- * 模型常把 crawl/ 相对路径拼到 Skill 目录下。
- * 若命中 skills-plugin/.../crawl/...，改写到 workspace/crawl/...
- */
-function remapMistakenSkillCrawlPath(
-  filePath: string,
-  workspace: string,
-): string | null {
-  const normalized = filePath.replace(/\\/g, "/");
-  const underSkills =
-    normalized.includes("/skills-plugin/") ||
-    normalized.includes("/skills/crawl-analyze/");
-  if (!underSkills) return null;
-  const m = normalized.match(/\/crawl\/(.+)$/);
-  if (!m) return null;
-  return path.join(workspace, "crawl", m[1]);
-}
-
-function rewriteToolPathInput(
-  toolName: string,
-  toolInput: unknown,
-  workspace: string,
-): Record<string, unknown> | null {
-  if (!toolInput || typeof toolInput !== "object") return null;
-  const input = { ...(toolInput as Record<string, unknown>) };
-  const keys =
-    toolName === "Bash"
-      ? ([] as string[])
-      : (["file_path", "path", "notebook_path"] as const);
-  let changed = false;
-  for (const key of keys) {
-    const v = input[key];
-    if (typeof v !== "string") continue;
-    const fixed = remapMistakenSkillCrawlPath(v, workspace);
-    if (fixed && fixed !== v) {
-      input[key] = fixed;
-      changed = true;
-    }
-  }
-  return changed ? input : null;
-}
-
-/**
- * 跑一轮 Claude Agent query。
+ * 跑一轮 Claude Agent query（workflow run_agent 步骤，见 workflowAgent.ts）。
  * - 开启 Skill（通过本地 plugin）
- * - 进程内 MCP crawl：start/await/cancel/list
  * - 进程内 MCP python：run_python（内置解释器，不依赖 shell）
  * - 允许 Read / Write / Glob / Grep / Bash（Skill 可读写工作区）
  * - Windows 屏蔽 PowerShell：没装 Git Bash 时 CLI 会用它顶替 Bash，命令写法与权限规则都对不上
- * - 工具入参/结果通过 PreToolUse/PostToolUse hook 打日志（allowedTools 自动批准时 canUseTool 不会触发）
+ * - 工具失败通过 PostToolUseFailure hook 打日志（allowedTools 自动批准时 canUseTool 不会触发）
  */
 export async function runAgent(options: RunAgentOptions): Promise<string> {
   const { prompt, onEvent, abortController } = options;
-  const workspace = ensureWorkspaceDir();
-  const skillsPlugin = getSkillsPluginDir();
+  const workspace = options.workDir;
+  const pluginDirs = options.pluginDirs ?? [];
   const cliPath = resolveClaudeCli();
   const model = options.model || process.env.ANTHROPIC_MODEL || undefined;
+  const python = createPythonSession(workspace);
+  const onAbort = () => python.killAll();
+  abortController?.signal.addEventListener("abort", onAbort, { once: true });
 
   onEvent({ kind: "log", text: `CLI: ${cliPath}` });
   onEvent({ kind: "log", text: `工作区: ${workspace}` });
-  onEvent({ kind: "log", text: `Skills 插件: ${skillsPlugin}` });
-  onEvent({ kind: "log", text: "MCP: crawl (run_crawl / start_crawl / await_crawl / …)" });
+  onEvent({ kind: "log", text: `Skills 插件: ${pluginDirs.length ? pluginDirs.join(", ") : "无"}` });
   onEvent({ kind: "log", text: `MCP: python (run_python) → ${getPythonExecutable() ?? "未找到内置 Python"}` });
   if (model) onEvent({ kind: "log", text: `模型: ${model}` });
 
@@ -113,151 +77,128 @@ export async function runAgent(options: RunAgentOptions): Promise<string> {
     for await (const message of query({
       prompt,
       options: {
-      cwd: workspace,
-      model,
-      abortController,
-      pathToClaudeCodeExecutable: cliPath,
-      // 不读取用户本机 ~/.claude，只用我们打包的 plugin
-      settingSources: [],
-      plugins: [{ type: "local", path: skillsPlugin }],
-      skills: "all",
-      mcpServers: { crawl: crawlMcpServer, python: pythonMcpServer },
-      allowedTools: [
-        "Read",
-        "Write",
-        "Glob",
-        "Grep",
-        "Bash",
-        "Skill",
-        "mcp__crawl__*",
-        "mcp__python__*",
-      ],
-      disallowedTools: [
-        "Bash(rm -rf *)",
-        "Bash(sudo *)",
-        ...(process.platform === "win32" ? ["PowerShell"] : []),
-      ],
-      permissionMode: "default",
-      env: {
-        ...withBundledPython(process.env),
-        // 标识来源，方便网关侧排查
-        CLAUDE_AGENT_SDK_CLIENT_APP: "electron-claude-agent",
-      },
-      stderr: (data) => {
-        const text = data.trim();
-        if (text) onEvent({ kind: "log", text: `[stderr] ${text}` });
-      },
-      hooks: {
-        PreToolUse: [
-          {
-            hooks: [
-              async (input) => {
-                if (input.hook_event_name !== "PreToolUse") return {};
-                const rewritten = rewriteToolPathInput(
-                  input.tool_name,
-                  input.tool_input,
-                  workspace,
-                );
-                if (!rewritten) return {};
-                onEvent({
-                  kind: "log",
-                  text: `已纠正工具路径 → 工作区: ${summarizePayload(rewritten, 400)}`,
-                });
-                return {
-                  hookSpecificOutput: {
-                    hookEventName: "PreToolUse",
-                    updatedInput: rewritten,
-                  },
-                };
-              },
-            ],
-          },
+        cwd: workspace,
+        model,
+        abortController,
+        pathToClaudeCodeExecutable: cliPath,
+        ...(options.systemPrompt
+          ? { systemPrompt: { type: "preset" as const, preset: "claude_code" as const, append: options.systemPrompt } }
+          : {}),
+        // 不读取用户本机 ~/.claude，只用我们指定的 plugin
+        settingSources: [],
+        plugins: pluginDirs.map((dir) => ({ type: "local" as const, path: dir })),
+        skills: "all",
+        mcpServers: { python: python.server },
+        allowedTools: [
+          "Read",
+          "Write",
+          "Glob",
+          "Grep",
+          "Bash",
+          "Skill",
+          "mcp__python__*",
         ],
-        PostToolUse: [
-          {
-            hooks: [
-              async (input) => {
-                if (input.hook_event_name !== "PostToolUse") return {};
-                // onEvent({
-                //   kind: "tool",
-                //   text: `工具结果 ${input.tool_name}: ${summarizePayload(input.tool_response)}`,
-                // });
-                return {};
-              },
-            ],
-          },
+        disallowedTools: [
+          "Bash(rm -rf *)",
+          "Bash(sudo *)",
+          ...(process.platform === "win32" ? ["PowerShell"] : []),
         ],
-        PostToolUseFailure: [
-          {
-            hooks: [
-              async (input) => {
-                if (input.hook_event_name !== "PostToolUseFailure") return {};
-                const err =
-                  "error" in input
-                    ? summarizePayload((input as { error?: unknown }).error)
-                    : "unknown";
-                onEvent({
-                  kind: "error",
-                  text: `工具失败 ${input.tool_name}: ${err}`,
-                });
-                return {};
-              },
-            ],
-          },
-        ],
-      },
-      canUseTool: async (toolName, input) => {
-        // 注意：列在 allowedTools 里的工具会自动批准，通常不会走到这里
-        onEvent({
-          kind: "tool",
-          text: `请求工具 ${toolName}: ${summarizePayload(input)}`,
-        });
+        permissionMode: "default",
+        env: {
+          ...withBundledPython(process.env),
+          // 标识来源，方便网关侧排查
+          CLAUDE_AGENT_SDK_CLIENT_APP: "electron-claude-agent",
+        },
+        stderr: (data) => {
+          const text = data.trim();
+          if (text) onEvent({ kind: "log", text: `[stderr] ${text}` });
+        },
+        hooks: {
+          PostToolUse: [
+            {
+              hooks: [
+                async (input) => {
+                  if (input.hook_event_name !== "PostToolUse") return {};
+                  // onEvent({
+                  //   kind: "tool",
+                  //   text: `工具结果 ${input.tool_name}: ${summarizePayload(input.tool_response)}`,
+                  // });
+                  return {};
+                },
+              ],
+            },
+          ],
+          PostToolUseFailure: [
+            {
+              hooks: [
+                async (input) => {
+                  if (input.hook_event_name !== "PostToolUseFailure") return {};
+                  const err =
+                    "error" in input
+                      ? summarizePayload((input as { error?: unknown }).error)
+                      : "unknown";
+                  onEvent({
+                    kind: "error",
+                    text: `工具失败 ${input.tool_name}: ${err}`,
+                  });
+                  return {};
+                },
+              ],
+            },
+          ],
+        },
+        canUseTool: async (toolName, input) => {
+          // 注意：列在 allowedTools 里的工具会自动批准，通常不会走到这里
+          onEvent({
+            kind: "tool",
+            text: `请求工具 ${toolName}: ${summarizePayload(input)}`,
+          });
 
-        if (toolName.startsWith("mcp__crawl__") || toolName.startsWith("mcp__python__")) {
-          return { behavior: "allow", updatedInput: input };
-        }
+          if (toolName.startsWith("mcp__python__")) {
+            return { behavior: "allow", updatedInput: input };
+          }
 
-        if (toolName === "PowerShell") {
-          return { behavior: "deny", message: "已禁用 PowerShell，执行 Python 请用 mcp__python__run_python" };
-        }
+          if (toolName === "PowerShell") {
+            return { behavior: "deny", message: "已禁用 PowerShell，执行 Python 请用 mcp__python__run_python" };
+          }
 
-        if (toolName === "Bash") {
-          const command = String((input as { command?: string }).command ?? "");
-          onEvent({ kind: "log", text: `自动批准 Bash: ${command}` });
+          if (toolName === "Bash") {
+            const command = String((input as { command?: string }).command ?? "");
+            onEvent({ kind: "log", text: `自动批准 Bash: ${command}` });
+            return {
+              behavior: "allow",
+              updatedInput: input,
+            };
+          }
+
+          const filePath =
+            (input as { file_path?: string; path?: string }).file_path ??
+            (input as { path?: string }).path;
+          if (typeof filePath === "string") {
+            const inWorkspace = isInsideDir(workspace, filePath);
+            const inSkills = pluginDirs.some((dir) => isInsideDir(dir, filePath));
+            const readOnlyTool =
+              toolName === "Read" || toolName === "Glob" || toolName === "Grep";
+            if (inWorkspace) {
+              /* ok */
+            } else if (inSkills && readOnlyTool) {
+              onEvent({ kind: "log", text: `允许读取 Skill 文件: ${filePath}` });
+            } else {
+              return {
+                behavior: "deny",
+                message: inSkills
+                  ? `Skills 插件目录只读，禁止 ${toolName}: ${filePath}`
+                  : `路径超出工作区: ${filePath}`,
+              };
+            }
+          }
+
           return {
             behavior: "allow",
             updatedInput: input,
           };
-        }
-
-        const filePath =
-          (input as { file_path?: string; path?: string }).file_path ??
-          (input as { path?: string }).path;
-        if (typeof filePath === "string") {
-          const inWorkspace = isInsideDir(workspace, filePath);
-          const inSkills = isInsideDir(skillsPlugin, filePath);
-          const readOnlyTool =
-            toolName === "Read" || toolName === "Glob" || toolName === "Grep";
-          if (inWorkspace) {
-            /* ok */
-          } else if (inSkills && readOnlyTool) {
-            onEvent({ kind: "log", text: `允许读取 Skill 文件: ${filePath}` });
-          } else {
-            return {
-              behavior: "deny",
-              message: inSkills
-                ? `Skills 插件目录只读，禁止 ${toolName}: ${filePath}`
-                : `路径超出工作区: ${filePath}`,
-            };
-          }
-        }
-
-        return {
-          behavior: "allow",
-          updatedInput: input,
-        };
+        },
       },
-    },
   })) {
     if (message.type === "assistant") {
       const content = message.message?.content;
@@ -340,6 +281,10 @@ export async function runAgent(options: RunAgentOptions): Promise<string> {
       throw new AgentStoppedError();
     }
     throw err;
+  } finally {
+    abortController?.signal.removeEventListener("abort", onAbort);
+    // Agent 结束后不应再有它启动的 Python 在跑（超时 / 异常退出时可能遗留）
+    python.killAll();
   }
 
   if (abortController?.signal.aborted) {

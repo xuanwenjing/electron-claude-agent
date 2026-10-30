@@ -1,9 +1,9 @@
 # Electron Claude Agent
 
-最小可运行示例：**Electron 窗口点按钮 → `claude-agent-sdk` 的 `query()`**，支持：
+Electron 客户端 + Chrome/Edge 扩展：客户端下发工作流配置，扩展执行；工作流里的 `run_agent` 步骤回到客户端用 `claude-agent-sdk` 的 `query()` 运行大模型，支持：
 
-- Skill（打包内置 `workspace-summary`）
-- 系统命令（Bash）
+- 远程 Skill 包（`run_agent_params.skills`）
+- 内置 Python（`mcp__python__run_python`）与系统命令（Bash）
 - macOS / Windows 打包（asarUnpack + entitlements）
 
 ## 快速开始
@@ -17,7 +17,7 @@ npm start
 # 开发热编译：npm run dev
 ```
 
-窗口打开后点「运行 query」。日志区会流式显示工具调用与结果。
+窗口打开后在「抓取」页下发工作流配置，`run_agent` 步骤的模型过程日志记入所属任务。
 
 > 若在 Cursor 终端里直接跑 `electron .` 失败，是因为环境变量 `ELECTRON_RUN_AS_NODE=1` 会把 `require('electron')` 变成路径字符串。请用 `npm start`（内部已清除该变量）。
 
@@ -26,13 +26,12 @@ npm start
 | 路径 | 作用 |
 |------|------|
 | `src/main/index.ts` | 应用生命周期入口 |
-| `src/main/agent/` | Agent：`runAgent.ts` 调用 `query()`，`crawlMcp.ts` / `pythonMcp.ts` 工具，`resolveClaudeCli.ts` 解析 Claude 原生二进制 |
+| `src/main/agent/` | workflow `run_agent`：`workflowAgent.ts` 管理工作空间与任务清理，`skillPackage.ts` 下载安装 Skill，`runAgent.ts` 调用 `query()`，`pythonMcp.ts` 工具，`resolveClaudeCli.ts` 解析 Claude 原生二进制 |
 | `src/main/crawl/` | 与 Chrome 扩展通信的 WebSocket bridge、打开浏览器 |
-| `src/main/ipc/` | 渲染进程 IPC 处理（agent / crawl / db / update） |
+| `src/main/ipc/` | 渲染进程 IPC 处理（api / crawl / db / update） |
 | `src/main/update/` | 客户端自动更新、Chrome 扩展安装与远程更新 |
 | `src/main/db/` | SQLite（drizzle） |
-| `resources/skills-plugin/` | 内置 Skill 插件 |
-| `workspace/` | Agent 工作区（cwd） |
+| `workspace/` | 客户端数据目录：抓取结果 `crawl/`、run_agent 工作空间 `agent-runs/`（打包后在 userData） |
 | `build/entitlements.mac.plist` | macOS 允许 spawn 子进程 |
 
 ## 打包

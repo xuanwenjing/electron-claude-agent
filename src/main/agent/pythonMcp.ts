@@ -4,14 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 
-import { ensureWorkspaceDir, getPythonBinDir, getPythonExecutable } from "../paths";
+import { getPythonBinDir, getPythonExecutable } from "../paths";
 
 const OUTPUT_MAX_CHARS = 30_000;
 const DEFAULT_TIMEOUT_SEC = 120;
 const MAX_TIMEOUT_SEC = 1800;
 const SNIPPET_DIR = "tmp-python";
 
-const running = new Set<ChildProcess>();
+/** 所有 Agent 的 Python 进程，仅用于应用退出时兜底清理 */
+const allProcesses = new Set<ChildProcess>();
 
 function textResult(payload: unknown, isError = false) {
   return {
@@ -56,9 +57,9 @@ function killTree(child: ChildProcess): void {
   }
 }
 
-/** 用户停止 Agent 时调用 */
-export function killRunningPython(): void {
-  for (const child of running) killTree(child);
+/** 应用退出时调用：结束所有 Agent 遗留的 Python 进程 */
+export function killAllPython(): void {
+  for (const child of allProcesses) killTree(child);
 }
 
 function clip(text: string): string {
@@ -85,20 +86,26 @@ function runScript(
   exe: string,
   scriptAbs: string,
   args: string[],
-  workspace: string,
+  workDir: string,
   timeoutSec: number,
+  processes: Set<ChildProcess>,
 ): Promise<RunOutcome> {
   return new Promise((resolve, reject) => {
     const started = Date.now();
     const child = spawn(exe, [scriptAbs, ...args], {
-      cwd: workspace,
+      cwd: workDir,
       env: withBundledPython(process.env),
       windowsHide: true,
       // 独立进程组，超时/停止时可整组结束
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
-    running.add(child);
+    processes.add(child);
+    allProcesses.add(child);
+    const untrack = () => {
+      processes.delete(child);
+      allProcesses.delete(child);
+    };
 
     let stdout = "";
     let stderr = "";
@@ -117,18 +124,18 @@ function runScript(
 
     child.once("error", (err) => {
       clearTimeout(timer);
-      running.delete(child);
+      untrack();
       reject(err);
     });
     child.once("close", (code) => {
       clearTimeout(timer);
-      running.delete(child);
+      untrack();
       resolve({ exitCode: code, timedOut, stdout, stderr, durationMs: Date.now() - started });
     });
   });
 }
 
-const runPython = tool(
+const createRunPythonTool = (workspace: string, processes: Set<ChildProcess>) => tool(
   "run_python",
   [
     "用客户端内置的 Python 3.12 执行脚本（mac / Windows 一致，不依赖系统 Python 或 shell）。",
@@ -158,7 +165,6 @@ const runPython = tool(
       return textResult({ ok: false, error: "script 与 code 必须且只能传一个" }, true);
     }
 
-    const workspace = ensureWorkspaceDir();
     let scriptAbs: string;
     if (args.script) {
       const rel = args.script.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -177,7 +183,7 @@ const runPython = tool(
 
     const timeoutSec = Math.min(Math.max(args.timeoutSec, 1), MAX_TIMEOUT_SEC);
     try {
-      const out = await runScript(exe, scriptAbs, args.args, workspace, timeoutSec);
+      const out = await runScript(exe, scriptAbs, args.args, workspace, timeoutSec, processes);
       const ok = out.exitCode === 0 && !out.timedOut;
       return textResult(
         {
@@ -206,12 +212,31 @@ const runPython = tool(
   { alwaysLoad: true },
 );
 
-/** 进程内 MCP：用内置解释器执行 Python，替代依赖 shell 的 Bash / PowerShell */
-export const pythonMcpServer = createSdkMcpServer({
-  name: "python",
-  version: "1.0.0",
-  instructions:
-    "执行 Python 一律用 run_python（内置 3.12，跨平台一致）。脚本相对工作区根目录读写文件。",
-  tools: [runPython],
-  alwaysLoad: true,
-});
+/** 一次 Agent 运行的 Python 上下文：工作目录 + 它启动的进程 */
+export interface PythonSession {
+  server: ReturnType<typeof createSdkMcpServer>;
+  /** 结束这次运行启动的所有 Python 进程（停止 / 运行结束时调用） */
+  killAll: () => void;
+}
+
+/**
+ * 进程内 MCP：用内置解释器执行 Python，替代依赖 shell 的 Bash / PowerShell。
+ * 每次 Agent 运行新建一个：MCP server 实例只能连一个 transport；
+ * 进程也按运行隔离，停止一个 Agent 不会误杀其它 Agent 的 Python。
+ */
+export function createPythonSession(workDir: string): PythonSession {
+  const processes = new Set<ChildProcess>();
+  return {
+    server: createSdkMcpServer({
+      name: "python",
+      version: "1.0.0",
+      instructions:
+        "执行 Python 一律用 run_python（内置 3.12，跨平台一致）。脚本相对工作区根目录读写文件。",
+      tools: [createRunPythonTool(workDir, processes)],
+      alwaysLoad: true,
+    }),
+    killAll: () => {
+      for (const child of processes) killTree(child);
+    },
+  };
+}

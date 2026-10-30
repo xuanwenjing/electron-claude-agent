@@ -3,7 +3,8 @@
  */
 import type { Collector, EmitFn, WorkflowItem, XhrCapturePayload } from "../types";
 import { urlMatch } from "../util";
-import { updateData } from "./collector";
+import { captureNetworkHit, captureRules } from "../variables";
+import { collectNetworkHit } from "./collector";
 
 interface ActiveCapture {
   tabId: number | null;
@@ -49,14 +50,7 @@ export function buildMatchApiList(workflowItem: WorkflowItem): string[] {
   if (workflowItem.need_collect && workflowItem.reg_exp) {
     list.push(workflowItem.reg_exp);
   }
-  if (workflowItem.global_variables) {
-    const vars = Array.isArray(workflowItem.global_variables)
-      ? workflowItem.global_variables
-      : [workflowItem.global_variables];
-    for (const item of vars) {
-      if (item?.url) list.push(item.url);
-    }
-  }
+  list.push(...captureRules(workflowItem));
   return list;
 }
 
@@ -96,12 +90,14 @@ export function onXhrResponse(data: XhrCapturePayload | undefined, senderTabId?:
   const cookies = parseCookieToObject(data.cookie);
 
   emit(`网络命中: ${data.method || "GET"} ${data.api}`);
-  updateData(collector, workflowItem, {
+  const payload = {
     requestData,
     responseData,
     api: data.api,
     method: data.method,
     headers: data.headers || {},
     cookies,
-  });
+  };
+  captureNetworkHit(collector, workflowItem, payload, emit);
+  collectNetworkHit(collector, workflowItem, payload);
 }

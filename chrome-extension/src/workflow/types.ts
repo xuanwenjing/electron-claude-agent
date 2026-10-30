@@ -5,13 +5,8 @@ export type WorkflowStepType =
   | "call_api"
   | "call_backend"
   | "click"
-  | "loop";
-
-export interface GlobalVariable {
-  name: string;
-  url?: string;
-  value?: unknown;
-}
+  | "loop"
+  | "run_agent";
 
 export interface CallApiParam {
   url: string;
@@ -38,6 +33,21 @@ export interface CallBackendParam {
   timeout?: number;
 }
 
+/** run_agent：由客户端解压 Skill 包并运行大模型，结果用步骤的 save_as 写入变量 */
+export interface RunAgentStepParam {
+  /** 用户提示词，支持 ${expr}；对象 / 数组会先解析 ${expr} / __ref 再序列化成 JSON */
+  prompt: unknown;
+  /** 追加的系统提示词，支持 ${expr} */
+  system_prompt?: string;
+  model?: string;
+  /** Skill 包：远程 zip，根目录即单个 skill（有 SKILL.md）；url 支持 ${expr}，客户端进程内 url + version 相同只下载一次 */
+  skills?: { url: string; version: string }[];
+  /** json：把模型输出解析成对象（兼容 ```json 代码块），解析失败本步失败；默认 text */
+  output_format?: "text" | "json";
+  /** 毫秒，默认 600000 */
+  timeout?: number;
+}
+
 export interface WorkflowItem {
   type: WorkflowStepType | string;
   name?: string;
@@ -46,19 +56,31 @@ export interface WorkflowItem {
   event?: string;
   need_collect?: boolean;
   reg_exp?: string;
-  global_variables?: GlobalVariable | GlobalVariable[];
+  /** 变量名 → URL 规则：本步网络请求命中时写入 { url, method, headers, queryParams, payload, response, cookies } */
+  capture?: Record<string, string>;
+  /** 本步返回值写入的变量名（call_backend 返回体、run_agent 模型输出） */
+  save_as?: string;
+  /** 本步结束后：变量名 → 值（支持 ${expr} / 嵌套对象 / __ref），按书写顺序赋值 */
+  set?: Record<string, unknown>;
+  /** 本步结束后：数组变量名 → 要追加的值，用于跨轮累积 */
+  append?: Record<string, unknown>;
   call_api_params?: CallApiParam | CallApiParam[];
   call_backend_params?: CallBackendParam;
+  run_agent_params?: RunAgentStepParam;
   allow_exception?: boolean;
   pass_condition?: string;
   wait?: number | string;
   wait_before_finish?: number | string;
   close_tab_before_finish?: string;
   children?: WorkflowItem[];
+  /** loop：要遍历的数组或 "${expr}"，开始时做快照 */
   list?: unknown;
+  /** loop：当前元素的变量名（配合 list），默认 _item；只在循环内有效 */
+  item_var?: string;
+  /** loop：当前下标（从 0）的变量名，默认 _index；只在循环内有效 */
+  index_var?: string;
   max_count?: number | string;
   break_condition?: string;
-  loop_index_var?: string;
   recycle_count?: number;
   query_element_timeout?: number;
 }
@@ -111,6 +133,8 @@ export type CollectedEntry = CollectedText | CollectedArray | CollectedHotelInfo
 export interface Collector {
   data: Record<string, CollectedEntry>;
   variables: Record<string, unknown>;
+  /** 当前所在各层 loop 的下标，外层在前；loop 外为空数组 */
+  loopPath: number[];
 }
 
 export type EmitFn = (message: string) => void;

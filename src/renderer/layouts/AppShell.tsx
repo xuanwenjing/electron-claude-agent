@@ -1,9 +1,4 @@
-import {
-  Bot,
-  Bug,
-  Database,
-  Download,
-} from "lucide-react";
+import { Bug, Database, Download } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,8 +7,7 @@ import { cn } from "@/lib/utils";
 import { useCrawlStore } from "@/stores/useCrawlStore";
 import { type PanelId, useUiStore } from "@/stores/useUiStore";
 
-const navItems: Array<{ id: PanelId; label: string; icon: typeof Bot }> = [
-  { id: "agent", label: "Agent", icon: Bot },
+const navItems: Array<{ id: PanelId; label: string; icon: typeof Bug }> = [
   { id: "crawl", label: "抓取", icon: Bug },
   { id: "update", label: "更新", icon: Download },
   { id: "notes", label: "笔记", icon: Database },

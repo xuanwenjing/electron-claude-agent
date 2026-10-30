@@ -1,30 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-export type AgentProgressEvent = {
-  kind: "log" | "assistant" | "tool" | "result" | "error";
-  text: string;
-};
-
 export type NoteDto = {
   id: number;
   content: string;
   createdAt: string;
 };
-
-contextBridge.exposeInMainWorld("agentApi", {
-  run: (
-    prompt: string,
-  ): Promise<
-    { ok: true; result: string } | { ok: false; error: string; stopped?: boolean }
-  > => ipcRenderer.invoke("agent:run", prompt),
-  stop: (): Promise<{ ok: true } | { ok: false; error: string }> =>
-    ipcRenderer.invoke("agent:stop"),
-  onEvent: (handler: (event: AgentProgressEvent) => void): (() => void) => {
-    const listener = (_: Electron.IpcRendererEvent, event: AgentProgressEvent) => handler(event);
-    ipcRenderer.on("agent:event:message", listener);
-    return () => ipcRenderer.removeListener("agent:event:message", listener);
-  },
-});
 
 contextBridge.exposeInMainWorld("dbApi", {
   info: (): Promise<

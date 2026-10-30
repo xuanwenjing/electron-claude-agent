@@ -1,7 +1,0 @@
-Hello from electron-claude-agent workspace.
-
-项目目标：
-1. Electron 窗口点按钮跑通 claude-agent-sdk query
-2. 支持 Skill
-3. 支持执行系统命令（Bash）
-4. macOS / Windows 打包后可用

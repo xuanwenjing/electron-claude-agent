@@ -15,6 +15,8 @@ export const ToExtension = {
   ReloadExtension: "reload_extension",
   /** 客户端拉起浏览器后，让扩展把浏览器窗口最小化 */
   MinimizeBrowser: "minimize_browser",
+  /** 回复扩展的 run_agent 请求 */
+  RunAgentResult: "run_agent_result",
   Ping: "ping",
 } as const;
 
@@ -24,6 +26,10 @@ export const ToClient = {
   Heartbeat: "heartbeat",
   TaskProgress: "task_progress",
   TaskResult: "task_result",
+  /** workflow 的 run_agent 步骤：请求客户端运行大模型 */
+  RunAgent: "run_agent",
+  /** 任务取消时中止进行中的 run_agent */
+  CancelAgent: "cancel_agent",
 } as const;
 
 /** 任务失败错误码（task_result.errorCode / WorkflowResult.errorCode） */
@@ -56,7 +62,40 @@ export type ToExtensionMessage =
   | { type: typeof ToExtension.CancelTask; taskId?: string }
   | { type: typeof ToExtension.ReloadExtension; taskId: string }
   | { type: typeof ToExtension.MinimizeBrowser }
+  | RunAgentResultMessage
   | { type: typeof ToExtension.Ping };
+
+/** run_agent 用到的 Skill 包：远程 zip，解压后根目录即单个 skill（有 SKILL.md） */
+export type RunAgentSkill = {
+  url: string;
+  /** 客户端进程内 url + version 相同的包只下载一次，同一 version 内容不能变 */
+  version: string;
+};
+
+export type RunAgentParams = {
+  prompt: string;
+  systemPrompt?: string;
+  model?: string;
+  skills?: RunAgentSkill[];
+  timeoutMs?: number;
+};
+
+export type RunAgentRequestMessage = {
+  type: typeof ToClient.RunAgent;
+  requestId: string;
+  /** 所属抓取任务，模型过程日志记入该任务 */
+  taskId?: string;
+  params: RunAgentParams;
+};
+
+export type RunAgentResultMessage = {
+  type: typeof ToExtension.RunAgentResult;
+  requestId: string;
+  ok: boolean;
+  /** 模型最终输出文本 */
+  result?: string;
+  error?: string;
+};
 
 export type TaskProgressMessage = {
   type: typeof ToClient.TaskProgress;
@@ -78,4 +117,6 @@ export type ToClientMessage =
   | { type: typeof ToClient.Hello; role: typeof EXTENSION_ROLE }
   | { type: typeof ToClient.Heartbeat; role: typeof EXTENSION_ROLE; ts?: number }
   | TaskProgressMessage
-  | TaskResultMessage;
+  | TaskResultMessage
+  | RunAgentRequestMessage
+  | { type: typeof ToClient.CancelAgent; requestId: string };

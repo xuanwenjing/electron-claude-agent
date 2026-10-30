@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { handleApiFetch } from "./api";
 import { handleCallBackend } from "./ourBackend";
+import { handleRunAgent } from "./agent";
 import {
   acquireCrawlTab,
   ensureContentReady,
@@ -38,6 +39,7 @@ import {
 import type { CancelToken } from "./util";
 import { TaskCancelledError, cancellableSleep, resolveMaybeExpr, safeEval } from "./util";
 import { TaskErrorCode } from "../../../src/shared/bridgeProtocol";
+import { applyStepOutputs, assertVarName, validateStepVariables } from "./variables";
 
 /** 对齐 common.ts：默认等待与 wait_before_finish 叠加 */
 async function runDefaultWait(
@@ -62,6 +64,7 @@ export async function runWorkflow(
   config: WorkflowConfig,
   emit: EmitFn,
   token?: CancelToken | null,
+  taskId?: string,
 ): Promise<WorkflowResult> {
   const maxRetry = Math.max(1, Number(config.maxRetry) || 3);
   let lastError: string | null = null;
@@ -104,7 +107,9 @@ export async function runWorkflow(
       const runStep = async (workflowItem: WorkflowItem): Promise<void> => {
         if (stepToken.cancelled) throw new TaskCancelledError();
         emit(`步骤 ${workflowItem.type}: ${workflowItem.event || ""}`);
+        validateStepVariables(workflowItem);
         bindCapture(tabId, workflowItem, collector, emit);
+        let stepResult: unknown;
 
         if (workflowItem.type === "navigate") {
           if (!workflowItem.url) throw new Error("任务采集页面URL不能为空");
@@ -142,7 +147,7 @@ export async function runWorkflow(
           await handleApiFetch(tabId, collector, workflowItem, emit, stepToken);
           await runDefaultWait(workflowItem, 5000, 3000, stepToken);
         } else if (workflowItem.type === "call_backend") {
-          await handleCallBackend(collector, workflowItem, emit);
+          stepResult = await handleCallBackend(collector, workflowItem, emit);
         } else if (workflowItem.type === "click") {
           if (tabId == null) throw new Error("click 前需要先 navigate");
           const commonTaskRes = await sendContentTask(tabId, workflowItem);
@@ -154,6 +159,8 @@ export async function runWorkflow(
             }
           }
           await runDefaultWait(workflowItem, 10000, 3000, stepToken);
+        } else if (workflowItem.type === "run_agent") {
+          stepResult = await handleRunAgent(collector, workflowItem, emit, { taskId, token: stepToken });
         } else if (workflowItem.type === "loop") {
           await runLoop(workflowItem);
           return;
@@ -167,6 +174,8 @@ export async function runWorkflow(
         if (workflowItem.wait_before_finish != null) {
           await cancellableSleep(Number(workflowItem.wait_before_finish), stepToken);
         }
+
+        applyStepOutputs(collector, workflowItem, stepResult, emit);
 
         const complete = await isDataComplete(collector, workflowItem, tabId);
         if (!complete.success) {
@@ -184,47 +193,84 @@ export async function runWorkflow(
       };
 
       const runLoop = async (loopItem: WorkflowItem): Promise<void> => {
+        validateStepVariables(loopItem);
         const children = Array.isArray(loopItem.children) ? loopItem.children : [];
-        let maxCount = 0;
-        if (
-          typeof loopItem.max_count === "string" &&
-          /^\${[\s\S]*}$/.test(loopItem.max_count.trim())
-        ) {
-          maxCount = Number(safeEval(collector.variables, loopItem.max_count)) || 0;
-        } else {
-          maxCount = Number(loopItem.max_count) || 0;
+        const vars = collector.variables;
+
+        let items: unknown[] | null = null;
+        if (loopItem.list !== undefined) {
+          const listValue = resolveMaybeExpr(vars, loopItem.list);
+          if (listValue != null && !Array.isArray(listValue)) {
+            throw new Error(`[loop] list 不是数组: ${String(loopItem.list)}`);
+          }
+          items = Array.isArray(listValue) ? [...listValue] : [];
         }
-        if (Number.isNaN(maxCount)) {
-          throw new Error(`[loop] max_count 不是数字: ${loopItem.max_count}`);
+
+        let maxCount: number;
+        if (loopItem.max_count === undefined || loopItem.max_count === "") {
+          maxCount = items ? items.length : 0;
+        } else {
+          maxCount = Number(resolveMaybeExpr(vars, loopItem.max_count)) || 0;
+          if (items) maxCount = Math.min(maxCount, items.length);
         }
         if (!children.length || maxCount <= 0) {
-          emit("loop 跳过：children/max_count 无效");
+          emit("loop 跳过：children 为空或循环次数为 0");
           return;
         }
-        const indexVar = loopItem.loop_index_var || "_loopIndex";
-        emit(`循环最大次数 max_count=${maxCount}`);
-        for (let i = 0; i < maxCount; i++) {
-          if (stepToken.cancelled) throw new TaskCancelledError();
-          collector.variables[indexVar] = i;
-          emit(`循环 ${i + 1}/${maxCount}, ${indexVar}=${i}`);
-          for (const child of children) {
-            await runItem(child);
-          }
-          if (loopItem.break_condition) {
-            let stop = false;
+
+        const indexVar = loopItem.index_var ? assertVarName(loopItem.index_var, "index_var") : "_index";
+        const itemVar = items
+          ? loopItem.item_var
+            ? assertVarName(loopItem.item_var, "item_var")
+            : "_item"
+          : null;
+        const scopedVars = itemVar ? [indexVar, itemVar] : [indexVar];
+        const saved = scopedVars.map((name) => ({
+          name,
+          had: Object.prototype.hasOwnProperty.call(vars, name),
+          value: vars[name],
+        }));
+
+        emit(
+          items
+            ? `遍历 list，共 ${maxCount} 项（${indexVar} / ${itemVar}）`
+            : `循环最大次数 max_count=${maxCount}`,
+        );
+        try {
+          for (let i = 0; i < maxCount; i++) {
+            if (stepToken.cancelled) throw new TaskCancelledError();
+            vars[indexVar] = i;
+            if (items && itemVar) vars[itemVar] = items[i];
+            emit(`循环 ${i + 1}/${maxCount}, ${indexVar}=${i}`);
+            collector.loopPath.push(i);
             try {
-              stop = !!safeEval(collector.variables, loopItem.break_condition);
-            } catch (error) {
-              throw new Error(
-                `[loop] break_condition 求值失败: ${
-                  error instanceof Error ? error.message : String(error)
-                }`,
-              );
+              for (const child of children) {
+                await runItem(child);
+              }
+            } finally {
+              collector.loopPath.pop();
             }
-            if (stop) {
-              emit(`循环提前结束: ${loopItem.break_condition}`);
-              break;
+            if (loopItem.break_condition) {
+              let stop = false;
+              try {
+                stop = !!safeEval(vars, loopItem.break_condition);
+              } catch (error) {
+                throw new Error(
+                  `[loop] break_condition 求值失败: ${
+                    error instanceof Error ? error.message : String(error)
+                  }`,
+                );
+              }
+              if (stop) {
+                emit(`循环提前结束: ${loopItem.break_condition}`);
+                break;
+              }
             }
+          }
+        } finally {
+          for (const { name, had, value } of saved) {
+            if (had) vars[name] = value;
+            else delete vars[name];
           }
         }
       };

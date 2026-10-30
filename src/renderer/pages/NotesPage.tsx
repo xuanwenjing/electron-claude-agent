@@ -8,7 +8,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useAgentStore } from "@/stores/useAgentStore";
 import { useNotesStore } from "@/stores/useNotesStore";
 
 export function NotesPage() {
@@ -23,7 +22,9 @@ export function NotesPage() {
   const add = useNotesStore((s) => s.add);
   const remove = useNotesStore((s) => s.remove);
   const clear = useNotesStore((s) => s.clear);
-  const appendLog = useAgentStore((s) => s.appendLog);
+  const report = (err: string | null) => {
+    if (err) useNotesStore.setState({ error: err });
+  };
 
   useEffect(() => {
     void refresh();
@@ -48,20 +49,14 @@ export function NotesPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                void add().then((err) => {
-                  if (err) appendLog("error", err);
-                  else appendLog("log", "已写入笔记");
-                });
+                void add().then(report);
               }
             }}
           />
           <Button
             disabled={busy}
             onClick={() =>
-              void add().then((err) => {
-                if (err) appendLog("error", err);
-                else appendLog("log", "已写入笔记");
-              })
+              void add().then(report)
             }
           >
             添加
@@ -72,10 +67,7 @@ export function NotesPage() {
           <Button
             variant="outline"
             onClick={() =>
-              void clear().then((err) => {
-                if (err) appendLog("error", err);
-                else appendLog("log", "已清空笔记");
-              })
+              void clear().then(report)
             }
           >
             清空全部
@@ -100,9 +92,7 @@ export function NotesPage() {
                   variant="destructive"
                   size="sm"
                   onClick={() =>
-                    void remove(note.id).then((err) => {
-                      if (err) appendLog("error", err);
-                    })
+                    void remove(note.id).then(report)
                   }
                 >
                   删除

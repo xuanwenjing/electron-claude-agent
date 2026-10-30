@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type PanelId = "agent" | "crawl" | "update" | "notes";
+export type PanelId = "crawl" | "update" | "notes";
 
 type UiState = {
   currentPanel: PanelId;
@@ -8,6 +8,6 @@ type UiState = {
 };
 
 export const useUiStore = create<UiState>((set) => ({
-  currentPanel: "agent",
+  currentPanel: "crawl",
   setPanel: (panel) => set({ currentPanel: panel }),
 }));

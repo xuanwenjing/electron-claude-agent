@@ -2,14 +2,6 @@ import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 
-/** 内置 skill 插件目录（必须是真实磁盘路径，不能在 asar 内） */
-export function getSkillsPluginDir(): string {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, "skills-plugin");
-  }
-  return path.join(__dirname, "../../resources/skills-plugin");
-}
-
 /**
  * 内置 Python（python-build-standalone）根目录。
  * 开发态按 electron-builder 的 ${os}-${arch} 取 resources/python 下对应目录，
@@ -36,27 +28,13 @@ export function getPythonExecutable(): string | null {
 }
 
 /**
- * Agent 工作区：Read / Glob / Grep / Bash 默认在这里执行。
- * 开发态用仓库下的 workspace/；打包态复制到 userData，避免改安装包内文件。
+ * 客户端数据目录：抓取结果 crawl/、run_agent 工作空间 agent-runs/。
+ * 开发态用仓库下的 workspace/；打包态用 userData/workspace。
  */
 export function ensureWorkspaceDir(): string {
-  if (app.isPackaged) {
-    const dir = path.join(app.getPath("userData"), "workspace");
-    fs.mkdirSync(dir, { recursive: true });
-    seedWorkspaceIfEmpty(dir, path.join(process.resourcesPath, "workspace"));
-    return dir;
-  }
-  const dir = path.join(__dirname, "../../workspace");
+  const dir = app.isPackaged
+    ? path.join(app.getPath("userData"), "workspace")
+    : path.join(__dirname, "../../workspace");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
-}
-
-function seedWorkspaceIfEmpty(target: string, seedFrom: string): void {
-  const entries = fs.readdirSync(target);
-  if (entries.length > 0 || !fs.existsSync(seedFrom)) return;
-  for (const name of fs.readdirSync(seedFrom)) {
-    const from = path.join(seedFrom, name);
-    const to = path.join(target, name);
-    fs.cpSync(from, to, { recursive: true });
-  }
 }

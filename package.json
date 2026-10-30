@@ -80,14 +80,6 @@
     ],
     "extraResources": [
       {
-        "from": "resources/skills-plugin",
-        "to": "skills-plugin"
-      },
-      {
-        "from": "workspace",
-        "to": "workspace"
-      },
-      {
         "from": "chrome-extension/dist",
         "to": "chrome-extension"
       },

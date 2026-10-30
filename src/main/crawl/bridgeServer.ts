@@ -8,26 +8,22 @@ import {
   ToClient,
   TaskErrorCode,
   ToExtension,
+  type RunAgentRequestMessage,
+  type RunAgentResultMessage,
   type TaskResultMessage,
   type ToClientMessage,
   type ToExtensionMessage,
 } from "../../shared/bridgeProtocol";
+import {
+  cancelAllWorkflowAgents,
+  cancelWorkflowAgent,
+  endWorkflowTask,
+  runWorkflowAgent,
+} from "../agent/workflowAgent";
 
 type ProgressHandler = (taskId: string, message: string) => void;
 type ResultHandler = (msg: TaskResultMessage) => void;
 type StatusHandler = (connected: boolean) => void;
-
-export type CrawlWaitOutcome = {
-  result: TaskResultMessage;
-  /** 该任务执行期间的 progress 日志（供 Agent 试配排查） */
-  progress: string[];
-};
-
-type PendingWaiter = {
-  resolve: (outcome: CrawlWaitOutcome) => void;
-  reject: (err: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
-};
 
 let wss: WebSocketServer | null = null;
 let extensionSocket: WebSocket | null = null;
@@ -37,53 +33,12 @@ let onStatus: StatusHandler | null = null;
 /** 服务端 ping：既探活，也给扩展 SW 制造活动，降低被挂起概率 */
 let pingTimer: ReturnType<typeof setInterval> | null = null;
 
-/** Agent await_crawl：按 taskId 等待结果（含「结果先到」缓冲） */
-const pendingResults = new Map<string, PendingWaiter>();
-const completedResults = new Map<string, CrawlWaitOutcome>();
-const progressLogs = new Map<string, string[]>();
-const COMPLETED_TTL_MS = 10 * 60 * 1000;
-const MAX_PROGRESS_LINES = 100;
-
-function appendProgress(taskId: string, message: string): void {
-  const list = progressLogs.get(taskId) ?? [];
-  list.push(message);
-  if (list.length > MAX_PROGRESS_LINES) {
-    list.splice(0, list.length - MAX_PROGRESS_LINES);
-  }
-  progressLogs.set(taskId, list);
-}
-
-function takeProgress(taskId: string): string[] {
-  const list = progressLogs.get(taskId) ?? [];
-  progressLogs.delete(taskId);
-  return list;
-}
-
-function settleCrawlResult(msg: TaskResultMessage): void {
-  const outcome: CrawlWaitOutcome = {
-    result: msg,
-    progress: takeProgress(msg.taskId),
-  };
-  const waiter = pendingResults.get(msg.taskId);
-  if (waiter) {
-    clearTimeout(waiter.timer);
-    pendingResults.delete(msg.taskId);
-    waiter.resolve(outcome);
-    return;
-  }
-  completedResults.set(msg.taskId, outcome);
-  setTimeout(() => {
-    const cached = completedResults.get(msg.taskId);
-    if (cached === outcome) completedResults.delete(msg.taskId);
-  }, COMPLETED_TTL_MS);
-}
-
 /** 已下发、尚未收到 task_result 的任务；扩展断开时（如浏览器被关闭）统一按失败结束 */
 const inflightTasks = new Set<string>();
 
 function handleTaskResult(msg: TaskResultMessage): void {
   inflightTasks.delete(msg.taskId);
-  settleCrawlResult(msg);
+  void endWorkflowTask(msg.taskId);
   onResult?.(msg);
 }
 
@@ -99,42 +54,26 @@ function failInflightTasks(reason: string): void {
   }
 }
 
-function rejectAllPending(reason: string): void {
-  for (const [taskId, waiter] of pendingResults) {
-    clearTimeout(waiter.timer);
-    waiter.reject(new Error(reason));
-    pendingResults.delete(taskId);
-    progressLogs.delete(taskId);
-  }
+/** run_agent 的模型过程日志记进所属任务（界面日志 / result.json） */
+function emitTaskProgress(taskId: string | undefined, message: string): void {
+  if (!taskId) return;
+  onProgress?.(taskId, message);
 }
 
-/**
- * 等待指定抓取任务的 task_result。
- * 若结果已先到达（start 与 await 之间的竞态），立即返回缓冲值。
- */
-export function waitForCrawlResult(
-  taskId: string,
-  timeoutMs = 120_000,
-): Promise<CrawlWaitOutcome> {
-  const cached = completedResults.get(taskId);
-  if (cached) {
-    completedResults.delete(taskId);
-    return Promise.resolve(cached);
+async function handleRunAgent(socket: WebSocket, msg: RunAgentRequestMessage): Promise<void> {
+  let reply: RunAgentResultMessage;
+  try {
+    const result = await runWorkflowAgent(msg.requestId, msg.taskId, msg.params, (m) => emitTaskProgress(msg.taskId, m));
+    reply = { type: ToExtension.RunAgentResult, requestId: msg.requestId, ok: true, result };
+  } catch (err) {
+    reply = {
+      type: ToExtension.RunAgentResult,
+      requestId: msg.requestId,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
-
-  return new Promise<CrawlWaitOutcome>((resolve, reject) => {
-    const prev = pendingResults.get(taskId);
-    if (prev) {
-      clearTimeout(prev.timer);
-      prev.reject(new Error(`waitForCrawlResult 被新的等待替换: ${taskId}`));
-    }
-    const timer = setTimeout(() => {
-      pendingResults.delete(taskId);
-      progressLogs.delete(taskId);
-      reject(new Error(`等待抓取结果超时（${timeoutMs}ms）: ${taskId}`));
-    }, timeoutMs);
-    pendingResults.set(taskId, { resolve, reject, timer });
-  });
+  if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(reply));
 }
 
 function stopPing(): void {
@@ -162,7 +101,7 @@ function setExtension(socket: WebSocket | null): void {
     if (wasConnected) {
       const reason = "浏览器扩展已断开连接（浏览器被关闭或扩展重载），任务中断";
       failInflightTasks(reason);
-      rejectAllPending(reason);
+      cancelAllWorkflowAgents();
     }
   }
   if (socket) {
@@ -218,12 +157,19 @@ export function startBridgeServer(handlers: {
         return;
       }
       if (msg.type === ToClient.TaskProgress) {
-        appendProgress(msg.taskId, msg.message);
         onProgress?.(msg.taskId, msg.message);
         return;
       }
       if (msg.type === ToClient.TaskResult) {
         handleTaskResult(msg);
+        return;
+      }
+      if (msg.type === ToClient.RunAgent) {
+        void handleRunAgent(socket, msg);
+        return;
+      }
+      if (msg.type === ToClient.CancelAgent) {
+        cancelWorkflowAgent(msg.requestId);
       }
     });
 
@@ -234,9 +180,6 @@ export function startBridgeServer(handlers: {
 }
 
 export function stopBridgeServer(): void {
-  rejectAllPending("Bridge 服务已停止");
-  completedResults.clear();
-  progressLogs.clear();
   inflightTasks.clear();
   stopPing();
   extensionSocket?.close();
@@ -257,7 +200,6 @@ export function startCrawlTask(
   if (!isExtensionConnected()) {
     return { ok: false, error: `浏览器扩展未连接（已尝试启动 Edge），请确认 Edge 已加载扩展（会自动连 ${BRIDGE_WS_URL}）` };
   }
-  progressLogs.set(taskId, []);
   inflightTasks.add(taskId);
   const payload: ToExtensionMessage = { type: ToExtension.StartTask, taskId, config, priority };
   extensionSocket!.send(JSON.stringify(payload));

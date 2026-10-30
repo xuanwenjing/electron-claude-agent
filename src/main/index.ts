@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 
+import { killAllPython } from "./agent/pythonMcp";
 import { stopBridgeServer } from "./crawl/bridgeServer";
 import { closeDatabase, initDatabase } from "./db";
 import { loadEnvFiles, loadUserDataEnv } from "./env";
@@ -27,6 +28,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  killAllPython();
   stopBridgeServer();
   closeDatabase();
 });

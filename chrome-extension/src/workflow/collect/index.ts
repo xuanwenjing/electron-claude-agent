@@ -1,8 +1,8 @@
 export {
   createCollector,
   resolveEvent,
-  updateVariables,
-  updateData,
+  pushCollected,
+  collectNetworkHit,
   isDataComplete,
 } from "./collector";
 export {

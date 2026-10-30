@@ -1,8 +1,3 @@
-export type AgentProgressEvent = {
-  kind: "log" | "assistant" | "tool" | "result" | "error";
-  text: string;
-};
-
 export type NoteDto = {
   id: number;
   content: string;
@@ -84,15 +79,6 @@ declare global {
       post: <T = any>(url: string, data?: unknown, config?: ExtraRequestConfig) => Promise<ApiResponse<T>>;
       put: <T = any>(url: string, data?: unknown, config?: ExtraRequestConfig) => Promise<ApiResponse<T>>;
       delete: <T = any>(url: string, params?: Record<string, unknown>, config?: ExtraRequestConfig) => Promise<ApiResponse<T>>;
-    };
-    agentApi: {
-      run: (
-        prompt: string,
-      ) => Promise<
-        { ok: true; result: string } | { ok: false; error: string; stopped?: boolean }
-      >;
-      stop: () => Promise<{ ok: true } | { ok: false; error: string }>;
-      onEvent: (handler: (event: AgentProgressEvent) => void) => () => void;
     };
     dbApi: {
       info: () => Promise<

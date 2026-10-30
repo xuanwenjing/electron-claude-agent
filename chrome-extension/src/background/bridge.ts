@@ -6,7 +6,7 @@ import {
   type ToClientMessage,
   type ToExtensionMessage,
 } from "../../../src/shared/bridgeProtocol";
-import type { WorkflowConfig } from "../workflow";
+import { TaskCancelledError, bindAgentRunner, type WorkflowConfig } from "../workflow";
 import { bindKeepAliveHooks, startKeepAlive, tickActiveKeepAlive } from "./keepAlive";
 import { minimizeBrowserWindows } from "./minimizeBrowser";
 import { isExtensionReloading, requestReloadExtension } from "./reloadExtension";
@@ -38,6 +38,44 @@ function send(msg: ToClientMessage): void {
 }
 
 bindTaskQueueSend(send);
+
+/** run_agent：requestId → 等待客户端回复 */
+const pendingAgents = new Map<string, { resolve: (text: string) => void; reject: (err: Error) => void }>();
+
+bindAgentRunner(({ taskId, params }, token) => {
+  return new Promise<string>((resolve, reject) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      reject(new Error("客户端未连接，无法运行 run_agent"));
+      return;
+    }
+    const requestId = crypto.randomUUID();
+    const poll = setInterval(() => {
+      if (!token?.cancelled) return;
+      send({ type: ToClient.CancelAgent, requestId });
+      done();
+      reject(new TaskCancelledError());
+    }, 500);
+    const done = () => {
+      clearInterval(poll);
+      pendingAgents.delete(requestId);
+    };
+    pendingAgents.set(requestId, {
+      resolve: (text) => {
+        done();
+        resolve(text);
+      },
+      reject: (err) => {
+        done();
+        reject(err);
+      },
+    });
+    send({ type: ToClient.RunAgent, requestId, taskId, params });
+  });
+});
+
+function rejectPendingAgents(reason: string): void {
+  for (const pending of [...pendingAgents.values()]) pending.reject(new Error(reason));
+}
 
 function stopHeartbeat(): void {
   if (heartbeatTimer) {
@@ -126,6 +164,14 @@ export function connect(): void {
       return;
     }
 
+    if (msg.type === ToExtension.RunAgentResult) {
+      const pending = pendingAgents.get(msg.requestId);
+      if (!pending) return;
+      if (msg.ok) pending.resolve(msg.result ?? "");
+      else pending.reject(new Error(msg.error || "run_agent 失败"));
+      return;
+    }
+
     if (msg.type === ToExtension.MinimizeBrowser) {
       void minimizeBrowserWindows();
       return;
@@ -140,6 +186,7 @@ export function connect(): void {
   socket.addEventListener("close", () => {
     console.warn("[crawl-ext] ws closed");
     stopHeartbeat();
+    rejectPendingAgents("客户端连接已断开，run_agent 中断");
     if (!isExtensionReloading()) {
       clearQueue("连接已断开，任务已取消");
     }

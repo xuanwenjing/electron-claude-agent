@@ -7,4 +7,5 @@ release/
 .DS_Store
 workspace/tmp-*
 workspace/crawl/
+workspace/agent-runs/
 resources/python/
