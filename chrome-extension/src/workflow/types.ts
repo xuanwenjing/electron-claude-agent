@@ -146,6 +146,8 @@ export interface WorkflowResult {
   error?: string | null;
   /** ok=false 时有值 */
   errorCode?: TaskErrorCode | null;
+  /** errorCode=SITE_BLOCKED 时：被禁用扩展的站点 */
+  blockedOrigin?: string;
 }
 
 export interface PageFetchResult {

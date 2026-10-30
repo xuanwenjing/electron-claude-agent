@@ -13,6 +13,8 @@ import { handleCallBackend } from "./ourBackend";
 import { handleRunAgent } from "./agent";
 import {
   acquireCrawlTab,
+  assertSiteAllowed,
+  blockedOriginOf,
   ensureContentReady,
   ensurePageFetchProxy,
   getOrCreateCrawlWindow,
@@ -161,6 +163,7 @@ export async function runWorkflow(
           emit(`正在打开任务采集页面: ${url}`);
 
           if (tabId == null) throw new Error("任务标签未创建");
+          await assertSiteAllowed(url);
           const openPage = async (): Promise<HotelInfoResult> => {
             const navigatedAt = Date.now();
             const navigated = await navigateCrawlTab(tabId!, url);
@@ -340,6 +343,12 @@ export async function runWorkflow(
       if (token?.cancelled || (err instanceof TaskCancelledError && closedTabId == null)) {
         emit("任务已取消");
         return { ok: false, error: "任务已取消", errorCode: TaskErrorCode.Cancelled, data: null };
+      }
+      const blockedOrigin = closedTabId != null ? null : await blockedOriginOf(err, tabId);
+      if (blockedOrigin) {
+        const error = `浏览器已设置不允许在 ${blockedOrigin} 使用扩展`;
+        emit(error);
+        return { ok: false, error, errorCode: TaskErrorCode.SiteBlocked, blockedOrigin, data: null };
       }
       const notLoggedIn =
         closedTabId != null ? null : err instanceof NotLoggedInError ? err : await loginPageError(tabId);

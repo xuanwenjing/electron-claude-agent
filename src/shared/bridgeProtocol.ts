@@ -46,6 +46,8 @@ export const TaskErrorCode = {
   InvalidTask: "INVALID_TASK",
   /** 任务标签页（或采集窗口）被关闭，且重试次数用尽 */
   TabClosed: "TAB_CLOSED",
+  /** 目标站点在浏览器里被设为「不允许使用扩展」（task_result.blockedOrigin 为该站点） */
+  SiteBlocked: "SITE_BLOCKED",
   /** 扩展正在重载，拒绝新的重载请求 */
   ExtensionReloading: "EXTENSION_RELOADING",
   /** 客户端侧：浏览器 / 扩展未能连上 bridge，任务未下发 */
@@ -113,6 +115,8 @@ export type TaskResultMessage = {
   error?: string | null;
   /** ok=false 时有值 */
   errorCode?: TaskErrorCode | null;
+  /** errorCode=SITE_BLOCKED 时：被禁用扩展的站点，如 https://me.meituan.com */
+  blockedOrigin?: string;
 };
 
 export type ToClientMessage =

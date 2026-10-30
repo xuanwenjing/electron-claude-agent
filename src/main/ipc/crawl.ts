@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { ipcMain, shell } from "electron";
 
-import { BRIDGE_PORT, TaskErrorCode } from "../../shared/bridgeProtocol";
+import { BRIDGE_PORT, TaskErrorCode, type TaskResultMessage } from "../../shared/bridgeProtocol";
 import {
   isExtensionConnected,
   reloadExtension,
   startBridgeServer,
   startCrawlTask,
 } from "../crawl/bridgeServer";
-import { ensureExtensionConnected } from "../crawl/edgeBrowser";
+import { ensureExtensionConnected, restartEdgeWithSiteUnblocked } from "../crawl/edgeBrowser";
 import { openUrlInChrome } from "../crawl/openBrowser";
 import { type CrawlLogEntry, writeCrawlResultFile } from "../crawl/resultFile";
 import { saveCrawlResult } from "../db";
@@ -19,7 +19,52 @@ import { toErrorMessage } from "./errors";
 const XHS_HOME = "https://www.xiaohongshu.com";
 
 /** 客户端直接下发（不经 Agent）的任务：taskId → config + 抓取日志，结果落盘 workspace/crawl/<taskId>/result.json */
-const directTasks = new Map<string, { config: unknown; logs: CrawlLogEntry[] }>();
+const directTasks = new Map<string, { config: unknown; logs: CrawlLogEntry[]; siteUnblocked?: boolean }>();
+
+function logTask(taskId: string, message: string): void {
+  directTasks.get(taskId)?.logs.push({ at: new Date().toISOString(), message });
+  sendToRenderer("crawl:event:progress", { taskId, message });
+}
+
+function finishTask(msg: TaskResultMessage): void {
+  const saved = saveCrawlResult({
+    taskId: msg.taskId,
+    ok: msg.ok,
+    data: msg.data,
+    error: msg.error,
+  });
+  let resultPath: string | null = null;
+  const task = directTasks.get(msg.taskId);
+  if (task) {
+    directTasks.delete(msg.taskId);
+    try {
+      resultPath = writeCrawlResultFile({ ...msg, config: task.config, logs: task.logs });
+    } catch (err) {
+      console.error("[crawl] 写入 result.json 失败", err);
+    }
+  }
+  sendToRenderer("crawl:event:result", {
+    taskId: msg.taskId,
+    ok: msg.ok,
+    error: msg.error,
+    errorCode: msg.errorCode ?? null,
+    saved,
+    resultPath,
+  });
+}
+
+/** 站点被禁用扩展：重启 Edge 解除后，同一 taskId 重新下发一次 */
+async function retryAfterUnblockSite(msg: TaskResultMessage, origin: string, config: unknown): Promise<void> {
+  const log = (message: string) => logTask(msg.taskId, `[客户端] ${message}`);
+  const restarted = await restartEdgeWithSiteUnblocked(origin, log);
+  const res = restarted.ok ? startCrawlTask(config, undefined, msg.taskId) : restarted;
+  if (res.ok) {
+    log("已重新下发任务");
+    return;
+  }
+  log(`解除站点限制失败: ${res.error}`);
+  finishTask(msg);
+}
 
 export function registerCrawlIpc(): void {
   ipcMain.handle("crawl:getStatus", () => ({
@@ -82,35 +127,15 @@ export function startCrawlBridge(): void {
       sendToRenderer("crawl:event:status", { connected, port: BRIDGE_PORT });
       if (connected) flushPendingExtensionReload();
     },
-    onProgress: (taskId, message) => {
-      directTasks.get(taskId)?.logs.push({ at: new Date().toISOString(), message });
-      sendToRenderer("crawl:event:progress", { taskId, message });
-    },
+    onProgress: logTask,
     onResult: (msg) => {
-      const saved = saveCrawlResult({
-        taskId: msg.taskId,
-        ok: msg.ok,
-        data: msg.data,
-        error: msg.error,
-      });
-      let resultPath: string | null = null;
       const task = directTasks.get(msg.taskId);
-      if (task) {
-        directTasks.delete(msg.taskId);
-        try {
-          resultPath = writeCrawlResultFile({ ...msg, config: task.config, logs: task.logs });
-        } catch (err) {
-          console.error("[crawl] 写入 result.json 失败", err);
-        }
+      if (task && !task.siteUnblocked && msg.errorCode === TaskErrorCode.SiteBlocked && msg.blockedOrigin) {
+        task.siteUnblocked = true;
+        void retryAfterUnblockSite(msg, msg.blockedOrigin, task.config);
+        return;
       }
-      sendToRenderer("crawl:event:result", {
-        taskId: msg.taskId,
-        ok: msg.ok,
-        error: msg.error,
-        errorCode: msg.errorCode ?? null,
-        saved,
-        resultPath,
-      });
+      finishTask(msg);
     },
   });
 }

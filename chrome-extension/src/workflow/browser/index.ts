@@ -12,3 +12,4 @@ export {
   removeTab,
   removeTabByUrlInWindow,
 } from "./tabs";
+export { SiteBlockedError, assertSiteAllowed, blockedOriginOf } from "./siteAccess";

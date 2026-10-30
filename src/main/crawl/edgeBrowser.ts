@@ -3,8 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { isExtensionConnected, minimizeBrowser, waitForExtensionConnected } from "./bridgeServer";
+import { unblockSiteInEdge } from "./edgeSitePermissions";
 
 const EDGE_APP_MAC = "Microsoft Edge";
+const EDGE_EXE_WIN = "msedge.exe";
+const QUIT_TIMEOUT_MS = 15_000;
+const QUIT_POLL_MS = 500;
 const EDGE_APP_MAC_PATHS = ["/Applications/Microsoft Edge.app", path.join(process.env.HOME ?? "", "Applications/Microsoft Edge.app")];
 /** 扩展 SW 休眠后靠 1 分钟周期 alarm 重连，等待需覆盖一个周期 */
 const CONNECT_TIMEOUT_MS = 70_000;
@@ -55,6 +59,71 @@ async function launchEdge(log: (msg: string) => void): Promise<string | null> {
     return res.ok ? null : `启动 Edge 失败：${res.output}`;
   }
   return `暂不支持在 ${process.platform} 上自动启动 Edge`;
+}
+
+async function isEdgeRunning(): Promise<boolean> {
+  if (process.platform === "darwin") {
+    const res = await execResult("osascript", ["-e", `application "${EDGE_APP_MAC}" is running`]);
+    return res.output === "true";
+  }
+  if (process.platform === "win32") {
+    const res = await execResult("tasklist", ["/FI", `IMAGENAME eq ${EDGE_EXE_WIN}`, "/NH"]);
+    return res.output.toLowerCase().includes(EDGE_EXE_WIN);
+  }
+  return false;
+}
+
+async function waitEdgeExit(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (await isEdgeRunning()) {
+    if (Date.now() > deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, QUIT_POLL_MS));
+  }
+  return true;
+}
+
+/** 正常退出 Edge（退出时 Edge 会把内存中的配置写回 Preferences），返回失败原因 */
+async function quitEdge(log: (msg: string) => void): Promise<string | null> {
+  if (process.platform === "darwin") {
+    log(`macOS：quit app "${EDGE_APP_MAC}"`);
+    await execResult("osascript", ["-e", `quit app "${EDGE_APP_MAC}"`]);
+  } else if (process.platform === "win32") {
+    log(`Windows：taskkill /IM ${EDGE_EXE_WIN}`);
+    await execResult("taskkill", ["/IM", EDGE_EXE_WIN]);
+  } else {
+    return `暂不支持在 ${process.platform} 上退出 Edge`;
+  }
+  if (await waitEdgeExit(QUIT_TIMEOUT_MS)) return null;
+  if (process.platform === "win32") {
+    // 开了「启动增强 / 后台运行」时 msedge 不响应正常关闭
+    log(`Edge 未退出，taskkill /F /IM ${EDGE_EXE_WIN}`);
+    await execResult("taskkill", ["/F", "/IM", EDGE_EXE_WIN]);
+    if (await waitEdgeExit(QUIT_TIMEOUT_MS)) return null;
+  }
+  return `Edge ${QUIT_TIMEOUT_MS / 1000}s 内未退出`;
+}
+
+/**
+ * 站点被设为「不允许使用扩展」：Edge 运行中改配置无效（退出时会被内存中的值覆盖），
+ * 所以先退出 Edge，再改 Preferences，最后重新拉起并等扩展连上。
+ */
+export async function restartEdgeWithSiteUnblocked(
+  origin: string,
+  log: (msg: string) => void,
+): Promise<EnsureConnectedResult> {
+  log(`站点 ${origin} 被设为「不允许使用扩展」，退出 Edge 后解除`);
+  const quitError = await quitEdge(log);
+  if (quitError) return { ok: false, error: quitError };
+  let unblockError: string | null = null;
+  try {
+    const profiles = await unblockSiteInEdge(origin);
+    log(`已从 Edge 配置（${profiles.join("、")}）移除 ${origin} 的「不允许使用扩展」`);
+  } catch (err) {
+    unblockError = err instanceof Error ? err.message : String(err);
+  }
+  const connected = await ensureExtensionConnected(log);
+  if (unblockError) return { ok: false, error: unblockError };
+  return connected;
 }
 
 let pending: Promise<EnsureConnectedResult> | null = null;

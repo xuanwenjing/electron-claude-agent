@@ -250,6 +250,7 @@ async function execute(item: QueuedTask, token: CancelToken): Promise<void> {
       data: result.data,
       error: result.error || null,
       errorCode: result.ok ? null : (result.errorCode ?? TaskErrorCode.Unknown),
+      blockedOrigin: result.blockedOrigin,
     });
   } catch (err) {
     sendFn({
