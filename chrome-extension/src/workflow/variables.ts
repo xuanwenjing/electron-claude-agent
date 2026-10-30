@@ -111,6 +111,23 @@ export function validateStepVariables(workflowItem: WorkflowItem): void {
   if (workflowItem.run_agent_params && "save_as" in workflowItem.run_agent_params) {
     throw new Error("run_agent_params.save_as 已不再支持：改为步骤上的 save_as");
   }
+  const { type } = workflowItem;
+  for (const field of ["list", "item_var", "index_var"] as const) {
+    if (workflowItem[field] !== undefined && type !== "loop" && type !== "run_agent") {
+      throw new Error(`${field} 只能用于 loop / run_agent，当前步骤是 ${type}`);
+    }
+  }
+  if (workflowItem.concurrency !== undefined) {
+    if (type !== "run_agent" || workflowItem.list === undefined) {
+      throw new Error("concurrency 只能用于带 list 的 run_agent（批量模式）");
+    }
+    if (!Number.isInteger(workflowItem.concurrency) || workflowItem.concurrency < 1) {
+      throw new Error(`concurrency 必须是 >= 1 的整数: ${String(workflowItem.concurrency)}`);
+    }
+  }
+  if (workflowItem.skip_if !== undefined && typeof workflowItem.skip_if !== "string") {
+    throw new Error("skip_if 必须是表达式字符串，如 \"${x == null}\"");
+  }
   for (const name of Object.keys(workflowItem.capture ?? {})) assertVarName(name, "capture");
   if (workflowItem.save_as !== undefined) assertVarName(workflowItem.save_as, "save_as");
   for (const name of Object.keys(workflowItem.set ?? {})) assertVarName(name, "set");

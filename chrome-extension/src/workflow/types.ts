@@ -67,18 +67,23 @@ export interface WorkflowItem {
   call_api_params?: CallApiParam | CallApiParam[];
   call_backend_params?: CallBackendParam;
   run_agent_params?: RunAgentStepParam;
+  /** 批量 run_agent：失败项写 null、错误写入 ${save_as}_errors，不让整步失败 */
   allow_exception?: boolean;
+  /** 步骤开始前求值，为真则跳过本步（loop 则跳过整个循环），如 "${replies[_index] == null}" */
+  skip_if?: string;
   pass_condition?: string;
   wait?: number | string;
   wait_before_finish?: number | string;
   close_tab_before_finish?: string;
   children?: WorkflowItem[];
-  /** loop：要遍历的数组或 "${expr}"，开始时做快照 */
+  /** loop / 批量 run_agent：要遍历的数组或 "${expr}"，开始时做快照 */
   list?: unknown;
-  /** loop：当前元素的变量名（配合 list），默认 _item；只在循环内有效 */
+  /** loop / 批量 run_agent：当前元素的变量名（配合 list），默认 _item；只在本步内有效 */
   item_var?: string;
-  /** loop：当前下标（从 0）的变量名，默认 _index；只在循环内有效 */
+  /** loop / 批量 run_agent：当前下标（从 0）的变量名，默认 _index；只在本步内有效 */
   index_var?: string;
+  /** 批量 run_agent：同时进行的模型调用数，默认 1；结果按 list 顺序组成数组 */
+  concurrency?: number;
   max_count?: number | string;
   break_condition?: string;
   recycle_count?: number;

@@ -13,6 +13,39 @@ const RUNS_DIR = "agent-runs";
 const NO_TASK_DIR = "_no-task";
 const ABORT_CANCELLED = "cancelled";
 const ABORT_TIMEOUT = "timeout";
+/** 客户端同时运行的 Agent 上限（所有任务合计），超出排队；每个 Agent 是一个 Claude CLI + Python 进程 */
+const MAX_AGENT_CONCURRENCY = 4;
+
+let activeAgents = 0;
+const slotWaiters: Array<() => void> = [];
+
+/** 拿到运行名额；排队中被取消则抛错 */
+function acquireSlot(signal: AbortSignal, log: (msg: string) => void): Promise<void> {
+  if (activeAgents < MAX_AGENT_CONCURRENCY) {
+    activeAgents++;
+    return Promise.resolve();
+  }
+  log(`run_agent 排队中：客户端已有 ${activeAgents}/${MAX_AGENT_CONCURRENCY} 个 Agent 在运行`);
+  return new Promise((resolve, reject) => {
+    const grant = () => {
+      signal.removeEventListener("abort", onAbort);
+      activeAgents++;
+      resolve();
+    };
+    const onAbort = () => {
+      const i = slotWaiters.indexOf(grant);
+      if (i !== -1) slotWaiters.splice(i, 1);
+      reject(new Error("run_agent 已取消"));
+    };
+    slotWaiters.push(grant);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function releaseSlot(): void {
+  activeAgents--;
+  slotWaiters.shift()?.();
+}
 
 /** taskId → 该任务进行中的 run（requestId → 结果），任务结束时等它们退出再删目录 */
 const tasks = new Map<string, Map<string, Promise<string>>>();
@@ -60,6 +93,12 @@ async function execute(
 ): Promise<string> {
   const abortController = new AbortController();
   running.set(requestId, abortController);
+  try {
+    await acquireSlot(abortController.signal, log);
+  } catch (err) {
+    running.delete(requestId);
+    throw err;
+  }
   const timeoutMs = params.timeoutMs && params.timeoutMs > 0 ? params.timeoutMs : DEFAULT_TIMEOUT_MS;
   const timer = setTimeout(() => abortController.abort(ABORT_TIMEOUT), timeoutMs);
   try {
@@ -85,6 +124,7 @@ async function execute(
   } finally {
     clearTimeout(timer);
     running.delete(requestId);
+    releaseSlot();
   }
 }
 

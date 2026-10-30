@@ -286,6 +286,18 @@ export async function runWorkflow(
       };
 
       const runItem = async (item: WorkflowItem): Promise<void> => {
+        if (item.skip_if) {
+          let skip: boolean;
+          try {
+            skip = !!safeEval(collector.variables, item.skip_if);
+          } catch (error) {
+            throw new Error(`skip_if 求值失败: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          if (skip) {
+            emit(`跳过 ${item.type}${item.event ? ` ${item.event}` : ""}: ${item.skip_if}`);
+            return;
+          }
+        }
         if (item.type === "loop") return runLoop(item);
         return runStep(item);
       };

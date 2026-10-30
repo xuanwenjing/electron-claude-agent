@@ -52,6 +52,10 @@ MAIN 拦截 → content → `onXhrResponse`：`captureNetworkHit` 写变量，`c
 
 所有写 `variables` 的逻辑都在 `src/workflow/variables.ts`：`capture`（网络命中）→ `save_as`（步骤返回值）→ `set` → `append`，loop 的 `item_var` / `index_var` 在 `runWorkflow.ts` 的 `runLoop` 里设置并在结束时恢复。
 
+`run_agent` 带 `list` 为批量模式（`src/workflow/agent/runAgent.ts`）：每项用 `{...variables, item_var, index_var}` 渲染 prompt（不改动 variables），最多 `concurrency` 个同时运行，结果按 list 顺序组成数组交给 `save_as`。默认任一项失败整步失败并中止其它项；`allow_exception` 时失败项为 `null`，错误写入 `${save_as}_errors`（`[{index, error}]`）。客户端所有任务合计最多同时运行 4 个 Agent（`workflowAgent.ts` 的 `MAX_AGENT_CONCURRENCY`），超出排队。
+
+任意步骤（含 loop）可配 `skip_if`：步骤开始前求值，为真则跳过，如 `"${replies[_index] == null}"`。
+
 ## 维护
 
 | 改什么 | 动哪里 |

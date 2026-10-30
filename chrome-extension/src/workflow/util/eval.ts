@@ -258,10 +258,16 @@ export function safeEval(context: Record<string, unknown> | null | undefined, ex
 /**
  * 字符串里嵌入的 ${...} 替换（用于 url 等）；整段 ${...} 直接求值
  */
+/** 整个字符串就是一个 ${expr}（返回原始类型）；"${a}-${b}" 这类模板不算 */
+export function isWholeExpr(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.startsWith("${") && trimmed.endsWith("}") && trimmed.indexOf("${", 2) === -1;
+}
+
 export function resolveMaybeExpr(variables: Record<string, unknown>, value: unknown): unknown {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
-  if (/^\${[\s\S]*}$/.test(trimmed)) return safeEval(variables, trimmed);
+  if (isWholeExpr(trimmed)) return safeEval(variables, trimmed);
   return value.replace(/\$\{([^}]+)\}/g, (_, expr: string) => {
     try {
       return String(safeEval(variables, `\${${expr}}`));
@@ -273,13 +279,13 @@ export function resolveMaybeExpr(variables: Record<string, unknown>, value: unkn
 
 /**
  * 对齐 wormhole common_getDeepValue：
- * - 整段 ${...} 字符串 → safeEval
+ * - 整段 ${...} 字符串 → safeEval（保留原始类型）；"${a}-${b}" 模板 → 插值成字符串
  * - 数组递归
  * - 对象字段 __ref → 展开合并进当前对象
  */
 export function getDeepValue(context: Record<string, unknown>, value: unknown): unknown {
-  if (typeof value === "string" && /^\${[\s\S]*}$/.test(value.trim())) {
-    return safeEval(context, value);
+  if (typeof value === "string" && value.includes("${")) {
+    return resolveMaybeExpr(context, value);
   }
   if (Array.isArray(value)) {
     return value.map((item) => getDeepValue(context, item));

@@ -2,6 +2,7 @@ export { sleep, cancellableSleep, createCancelToken, TaskCancelledError } from "
 export type { CancelToken } from "./cancel";
 export {
   safeEval,
+  isWholeExpr,
   resolveMaybeExpr,
   getDeepValue,
   deepResolve,
