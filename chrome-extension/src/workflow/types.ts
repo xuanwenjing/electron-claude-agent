@@ -87,13 +87,13 @@ export interface WorkflowItem {
 
 export interface WorkflowConfig {
   maxRetry?: number;
+  /** 仅非浏览器任务（第一步不是 navigate）：运行中的非浏览器任务少于该值时才启动，默认 3；浏览器任务配置了会被拒绝 */
+  max_task?: number;
   workflow?: WorkflowItem[];
   /** 任务所属平台；配合 needLogin 校验登录态 */
   platform?: HotelPlatform;
   /** true 时：navigate 到 platform 对应站点后必须已登录，未登录先尝试自动登录，仍失败则任务直接失败（不重试） */
   needLogin?: boolean;
-  /** 自动登录用的账号（飞猪需要先输入账号，未配置时用之前捕获的账号昵称；密码始终取浏览器密码管理器） */
-  loginAccount?: string;
 }
 
 export interface CollectedText {

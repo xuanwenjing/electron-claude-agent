@@ -9,6 +9,5 @@ export {
   buildMatchApiList,
   setNetworkCaptureContext,
   clearNetworkCaptureContext,
-  getNetworkCaptureContext,
   onXhrResponse,
 } from "./networkCapture";

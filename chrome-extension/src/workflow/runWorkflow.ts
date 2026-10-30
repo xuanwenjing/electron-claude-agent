@@ -40,6 +40,7 @@ import type { CancelToken } from "./util";
 import { TaskCancelledError, cancellableSleep, resolveMaybeExpr, safeEval } from "./util";
 import { TaskErrorCode } from "../../../src/shared/bridgeProtocol";
 import { applyStepOutputs, assertVarName, validateStepVariables } from "./variables";
+import { TaskKind, classifyWorkflow } from "./taskKind";
 
 /** 对齐 common.ts：默认等待与 wait_before_finish 叠加 */
 async function runDefaultWait(
@@ -51,21 +52,21 @@ async function runDefaultWait(
   await cancellableSleep(workflowItem.need_collect ? needCollectMs : idleMs, token);
 }
 
-function bindCapture(
-  tabId: number | null,
-  workflowItem: WorkflowItem,
-  collector: Collector,
-  emit: EmitFn,
-): void {
-  setNetworkCaptureContext({ tabId, workflowItem, collector, emit });
-}
-
 export async function runWorkflow(
   config: WorkflowConfig,
   emit: EmitFn,
   token?: CancelToken | null,
   taskId?: string,
 ): Promise<WorkflowResult> {
+  let kind: TaskKind;
+  try {
+    kind = classifyWorkflow(config);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    emit(error);
+    return { ok: false, error, errorCode: TaskErrorCode.InvalidTask, data: null };
+  }
+  const isBrowser = kind === TaskKind.Browser;
   const maxRetry = Math.max(1, Number(config.maxRetry) || 3);
   let lastError: string | null = null;
   let lastErrorCode: TaskErrorCode = TaskErrorCode.WorkflowFailed;
@@ -84,6 +85,14 @@ export async function runWorkflow(
       if (id === tabId) closedTabId = id;
     };
     chrome.tabs.onRemoved.addListener(onTabRemoved);
+    /** 已绑定捕获上下文的标签；navigate 可能换标签，换了要清掉旧的 */
+    let captureTabId: number | null = null;
+    const bindCapture = (workflowItem: WorkflowItem): void => {
+      if (tabId == null) return;
+      if (captureTabId != null && captureTabId !== tabId) clearNetworkCaptureContext(captureTabId);
+      captureTabId = tabId;
+      setNetworkCaptureContext({ tabId, workflowItem, collector, emit });
+    };
     const stepToken: CancelToken = {
       get cancelled() {
         return !!token?.cancelled || closedTabId != null;
@@ -91,24 +100,25 @@ export async function runWorkflow(
       cancel: () => token?.cancel(),
     };
     try {
-      emit(`第 ${attempt}/${maxRetry} 次尝试`);
-      const workflow = Array.isArray(config.workflow) ? config.workflow : [];
-      if (!workflow.length) throw new Error("workflow 为空");
+      emit(`第 ${attempt}/${maxRetry} 次尝试（${isBrowser ? "浏览器任务" : "非浏览器任务"}）`);
+      const workflow = config.workflow!;
 
-      const crawlWindow = await getOrCreateCrawlWindow();
-      windowId = crawlWindow.windowId;
-      emit(crawlWindow.note);
-      // 对齐 createTaskStore：任务开始先建空白工作标签，一任务绑定一标签
-      const blank = await acquireCrawlTab(windowId);
-      tabId = blank.id!;
-      await waitTabComplete(tabId, emit);
-      emit(`采集窗口 windowId=${windowId}，任务标签 tabId=${tabId}（首标签保活；结束后关闭任务标签）`);
+      if (isBrowser) {
+        const crawlWindow = await getOrCreateCrawlWindow();
+        windowId = crawlWindow.windowId;
+        emit(crawlWindow.note);
+        // 对齐 createTaskStore：任务开始先建空白工作标签，一任务绑定一标签
+        const blank = await acquireCrawlTab(windowId);
+        tabId = blank.id!;
+        await waitTabComplete(tabId, emit);
+        emit(`采集窗口 windowId=${windowId}，任务标签 tabId=${tabId}（首标签保活；结束后关闭任务标签）`);
+      }
 
       const runStep = async (workflowItem: WorkflowItem): Promise<void> => {
         if (stepToken.cancelled) throw new TaskCancelledError();
         emit(`步骤 ${workflowItem.type}: ${workflowItem.event || ""}`);
         validateStepVariables(workflowItem);
-        bindCapture(tabId, workflowItem, collector, emit);
+        bindCapture(workflowItem);
         let stepResult: unknown;
 
         if (workflowItem.type === "navigate") {
@@ -121,7 +131,7 @@ export async function runWorkflow(
             const navigatedAt = Date.now();
             const navigated = await navigateCrawlTab(tabId!, url);
             tabId = navigated.id!;
-            bindCapture(tabId, workflowItem, collector, emit);
+            bindCapture(workflowItem);
             await waitTabComplete(tabId, emit);
             await ensureContentReady(tabId);
             await ensurePageFetchProxy(tabId);
@@ -132,7 +142,7 @@ export async function runWorkflow(
           let autoLoginError: string | undefined;
           const missingLogin = getMissingLoginPlatform(config, url, hotelInfo);
           if (missingLogin) {
-            const login = await tryAutoLogin(tabId, missingLogin, emit, { account: config.loginAccount });
+            const login = await tryAutoLogin(tabId, missingLogin, emit);
             if (login.success) {
               emit("自动登录成功，重新打开任务采集页面");
               hotelInfo = await openPage();
@@ -308,11 +318,11 @@ export async function runWorkflow(
         lastError = err instanceof Error ? err.message : String(err);
         lastErrorCode = TaskErrorCode.WorkflowFailed;
       }
-      emit(`失败(${attempt}/${maxRetry}): ${lastError}${attempt < maxRetry ? "，重新打开标签页重试" : ""}`);
+      emit(`失败(${attempt}/${maxRetry}): ${lastError}${attempt < maxRetry ? (isBrowser ? "，重新打开标签页重试" : "，重试") : ""}`);
       if (attempt < maxRetry) await cancellableSleep(1000 * attempt, token);
     } finally {
       chrome.tabs.onRemoved.removeListener(onTabRemoved);
-      clearNetworkCaptureContext();
+      if (captureTabId != null) clearNetworkCaptureContext(captureTabId);
       // 对齐 stopCrawlTask：关掉任务绑定的工作标签
       if (tabId != null && closedTabId == null) {
         emit(`关闭任务标签 tabId=${tabId}`);

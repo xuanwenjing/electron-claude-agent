@@ -7,14 +7,14 @@ import { captureNetworkHit, captureRules } from "../variables";
 import { collectNetworkHit } from "./collector";
 
 interface ActiveCapture {
-  tabId: number | null;
   matchApiList: string[];
   workflowItem: WorkflowItem;
   collector: Collector;
   emit: EmitFn;
 }
 
-let active: ActiveCapture | null = null;
+/** 任务标签 tabId → 该任务当前步骤的捕获上下文；并行任务各绑各的标签，按请求来源标签分发 */
+const captures = new Map<number, ActiveCapture>();
 
 function parseCookieToObject(cookieStr?: string): Record<string, string> {
   if (!cookieStr) return {};
@@ -55,33 +55,29 @@ export function buildMatchApiList(workflowItem: WorkflowItem): string[] {
 }
 
 export function setNetworkCaptureContext(opts: {
-  tabId: number | null;
+  tabId: number;
   workflowItem: WorkflowItem;
   collector: Collector;
   emit?: EmitFn;
 }): void {
-  active = {
-    tabId: opts.tabId ?? null,
+  captures.set(opts.tabId, {
     matchApiList: buildMatchApiList(opts.workflowItem),
     workflowItem: opts.workflowItem,
     collector: opts.collector,
     emit: opts.emit || (() => {}),
-  };
+  });
 }
 
-export function clearNetworkCaptureContext(): void {
-  active = null;
-}
-
-export function getNetworkCaptureContext(): ActiveCapture | null {
-  return active;
+export function clearNetworkCaptureContext(tabId: number): void {
+  captures.delete(tabId);
 }
 
 export function onXhrResponse(data: XhrCapturePayload | undefined, senderTabId?: number): void {
-  if (!active || !data?.api) return;
-  if (active.tabId != null && senderTabId != null && senderTabId !== active.tabId) return;
+  if (senderTabId == null || !data?.api) return;
+  const capture = captures.get(senderTabId);
+  if (!capture) return;
 
-  const { matchApiList, workflowItem, collector, emit } = active;
+  const { matchApiList, workflowItem, collector, emit } = capture;
   if (!matchApiList.length) return;
   if (!matchApiList.some((pattern) => urlMatch(data.api, pattern))) return;
 

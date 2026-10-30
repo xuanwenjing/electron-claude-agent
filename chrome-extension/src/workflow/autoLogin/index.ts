@@ -12,17 +12,17 @@ import { tryAutoLoginDouyin } from "./douyin";
 import { AUTO_LOGIN_MAX_FAIL_COUNT, isAutoLoginDisabledToday, recordAutoLoginResult } from "./failLimit";
 import { tryAutoLoginFliggy } from "./fliggy";
 import { tryAutoLoginMeituan } from "./meituan";
-import type { AutoLoginOptions, AutoLoginResult } from "./types";
+import type { AutoLoginResult } from "./types";
 
-export type { AutoLoginOptions, AutoLoginResult } from "./types";
+export type { AutoLoginResult } from "./types";
 
-type AutoLoginImpl = (tabId: number, emit: EmitFn, opts: AutoLoginOptions) => Promise<AutoLoginResult>;
+type AutoLoginImpl = (tabId: number, emit: EmitFn) => Promise<AutoLoginResult>;
 
 const AUTO_LOGIN_IMPLS: Partial<Record<HotelPlatform, AutoLoginImpl>> = {
   [HotelPlatform.CtripEbk]: (tabId) => tryAutoLoginCtripEbk(tabId),
   [HotelPlatform.Meituan]: (tabId, emit) => tryAutoLoginMeituan(tabId, emit),
   [HotelPlatform.Douyin]: (tabId) => tryAutoLoginDouyin(tabId),
-  [HotelPlatform.Fliggy]: (tabId, emit, opts) => tryAutoLoginFliggy(tabId, emit, opts.account),
+  [HotelPlatform.Fliggy]: (tabId, emit) => tryAutoLoginFliggy(tabId, emit),
 };
 
 /**
@@ -33,7 +33,6 @@ export async function tryAutoLogin(
   tabId: number,
   platform: HotelPlatform,
   emit: EmitFn,
-  opts: AutoLoginOptions = {},
 ): Promise<AutoLoginResult> {
   const impl = AUTO_LOGIN_IMPLS[platform];
   const label = PLATFORM_LABELS[platform];
@@ -51,7 +50,7 @@ export async function tryAutoLogin(
       await sleep(500);
       await waitTabComplete(tabId, emit);
     }
-    result = await impl(tabId, emit, opts);
+    result = await impl(tabId, emit);
   } catch (err) {
     result = { success: false, errorMessage: err instanceof Error ? err.message : String(err) };
   } finally {

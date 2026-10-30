@@ -1,13 +1,14 @@
 /**
  * 对齐 wormhole BatchTaskManagerStore 的精简队列：
  * - 入队 / 优先级
- * - maxTask=1 串行
- * - 任务间隔
+ * - 按任务类型分池：浏览器任务串行（带启动间隔），非浏览器任务并行（上限取任务自己的 max_task）
  * - 超时看门狗
  * - 按 taskId 取消（排队中或执行中）
  */
 import { TaskErrorCode, ToClient, type ToClientMessage } from "../../../src/shared/bridgeProtocol";
 import {
+  TaskKind,
+  classifyWorkflow,
   createCancelToken,
   runWorkflow,
   type CancelToken,
@@ -20,18 +21,24 @@ export type QueueSendFn = (msg: ToClientMessage) => void;
 interface QueuedTask {
   taskId: string;
   config: WorkflowConfig;
+  kind: TaskKind;
+  /** 非浏览器任务：运行中的非浏览器任务少于该值才启动 */
+  maxTask: number;
   priority: number;
   enqueuedAt: number;
 }
 
-const MAX_TASK = 1;
+/** 浏览器任务共用一个采集窗口，固定串行 */
+const BROWSER_MAX_TASK = 1;
+/** 非浏览器任务未配置 max_task 时的默认值 */
+const DEFAULT_NON_BROWSER_MAX_TASK = 3;
 const TASK_TIMEOUT_MS = 60 * 60 * 1000;
 
 let queue: QueuedTask[] = [];
-let runningCount = 0;
-let activeTaskId: string | null = null;
-let activeCancel: CancelToken | null = null;
-let lastStartTime = 0;
+/** 执行中的任务：taskId → 取消令牌 / 类型 */
+const running = new Map<string, { token: CancelToken; kind: TaskKind }>();
+/** 浏览器任务的启动间隔 */
+let lastBrowserStartTime = 0;
 let shiftTimer: ReturnType<typeof setTimeout> | null = null;
 let taskInterval = Math.random() * 2000 + 500;
 let sendFn: QueueSendFn = () => {};
@@ -40,19 +47,25 @@ export function bindTaskQueueSend(fn: QueueSendFn): void {
   sendFn = fn;
 }
 
+function runningCount(kind: TaskKind): number {
+  let count = 0;
+  for (const r of running.values()) if (r.kind === kind) count++;
+  return count;
+}
+
 export function getQueueStatus(): {
   running: boolean;
-  activeTaskId: string | null;
+  activeTaskIds: string[];
   pending: number;
 } {
   return {
-    running: runningCount > 0,
-    activeTaskId,
+    running: running.size > 0,
+    activeTaskIds: [...running.keys()],
     pending: queue.length,
   };
 }
 
-/** 入队并尝试调度；同 taskId 已在队列/执行中则拒绝 */
+/** 入队并尝试调度；同 taskId 已在队列/执行中、或工作流不合法则拒绝 */
 export function enqueueTask(
   taskId: string,
   config: WorkflowConfig,
@@ -62,7 +75,7 @@ export function enqueueTask(
     sendFn({ type: ToClient.TaskResult, taskId, ok: false, error: "缺少 taskId", errorCode: TaskErrorCode.InvalidTask });
     return;
   }
-  if (activeTaskId === taskId || queue.some((t) => t.taskId === taskId)) {
+  if (running.has(taskId) || queue.some((t) => t.taskId === taskId)) {
     sendFn({
       type: ToClient.TaskResult,
       taskId,
@@ -73,10 +86,21 @@ export function enqueueTask(
     return;
   }
 
+  let kind: TaskKind;
+  try {
+    kind = classifyWorkflow(config || {});
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    sendFn({ type: ToClient.TaskResult, taskId, ok: false, error, errorCode: TaskErrorCode.InvalidTask });
+    return;
+  }
+
   const item: QueuedTask = {
     taskId,
     config: config || {},
-    priority: priority ?? queue.length + runningCount,
+    kind,
+    maxTask: config?.max_task ?? DEFAULT_NON_BROWSER_MAX_TASK,
+    priority: priority ?? queue.length + running.size,
     enqueuedAt: Date.now(),
   };
 
@@ -84,23 +108,23 @@ export function enqueueTask(
   if (idx === -1) queue.push(item);
   else queue.splice(idx, 0, item);
 
+  const ahead = queue.filter((t) => t.kind === kind).indexOf(item);
+  const label = kind === TaskKind.Browser ? "浏览器任务" : "非浏览器任务";
   sendFn({
     type: ToClient.TaskProgress,
     taskId,
-    message: `已入队（优先级 ${item.priority}），前方等待 ${Math.max(0, queue.indexOf(item))}，执行中 ${runningCount}`,
+    message: `已入队（${label}，优先级 ${item.priority}），前方等待 ${Math.max(0, ahead)}，执行中 ${runningCount(kind)}`,
   });
 
-  if (priority === -1) pump(true);
-  else pump(false);
+  pump(priority === -1);
 }
 
 /**
- * 取消指定任务；不传 taskId 则取消当前执行 + 清空队列
+ * 取消指定任务；不传 taskId 则取消所有执行中的任务 + 清空队列
  */
 export function cancelTask(taskId?: string): void {
   if (!taskId) {
     clearQueue("任务已取消");
-    activeCancel?.cancel();
     return;
   }
 
@@ -111,8 +135,9 @@ export function cancelTask(taskId?: string): void {
     return;
   }
 
-  if (activeTaskId === taskId) {
-    activeCancel?.cancel();
+  const active = running.get(taskId);
+  if (active) {
+    active.token.cancel();
     // 结果由 execute 结束时统一回传，避免重复 task_result
     sendFn({ type: ToClient.TaskProgress, taskId, message: "正在取消当前任务…" });
     return;
@@ -121,7 +146,7 @@ export function cancelTask(taskId?: string): void {
   sendFn({ type: ToClient.TaskResult, taskId, ok: false, error: "任务不存在或已结束", errorCode: TaskErrorCode.InvalidTask });
 }
 
-/** 断连 / 重连：清空排队并取消当前 */
+/** 断连 / 重连：清空排队并取消所有执行中的任务 */
 export function clearQueue(reason = "连接已断开，任务已取消"): void {
   if (shiftTimer) {
     clearTimeout(shiftTimer);
@@ -131,27 +156,38 @@ export function clearQueue(reason = "连接已断开，任务已取消"): void {
   for (const t of pending) {
     sendFn({ type: ToClient.TaskResult, taskId: t.taskId, ok: false, error: reason, errorCode: TaskErrorCode.Cancelled });
   }
-  activeCancel?.cancel();
-  lastStartTime = 0;
+  for (const { token } of running.values()) token.cancel();
+  lastBrowserStartTime = 0;
+}
+
+function start(item: QueuedTask): void {
+  queue.splice(queue.indexOf(item), 1);
+  const token = createCancelToken();
+  running.set(item.taskId, { token, kind: item.kind });
+  void execute(item, token).finally(() => {
+    running.delete(item.taskId);
+    pump(false);
+  });
 }
 
 function pump(immediate = false): void {
-  if (queue.length === 0) return;
-  if (runningCount >= MAX_TASK) return;
+  // 非浏览器任务：按优先级，运行中的非浏览器任务少于自己的 max_task 就启动，不需要间隔
+  for (const item of queue.filter((t) => t.kind === TaskKind.NonBrowser)) {
+    if (runningCount(TaskKind.NonBrowser) < item.maxTask) start(item);
+  }
+  pumpBrowser(immediate);
+}
+
+function pumpBrowser(immediate: boolean): void {
+  const next = queue.find((t) => t.kind === TaskKind.Browser);
+  if (!next) return;
+  const busy = runningCount(TaskKind.Browser);
+  if (busy >= BROWSER_MAX_TASK) return;
 
   if (!immediate) {
-    const since = Date.now() - lastStartTime;
-    if (runningCount > 0 && since < taskInterval) {
-      if (!shiftTimer) {
-        shiftTimer = setTimeout(() => {
-          shiftTimer = null;
-          pump(false);
-        }, Math.max(0, taskInterval - since));
-      }
-      return;
-    }
-    // 上一任务刚结束时也略等间隔（对齐 wormhole：有间隔再启动下一个）
-    if (runningCount === 0 && lastStartTime > 0 && since < taskInterval) {
+    const since = Date.now() - lastBrowserStartTime;
+    // 对齐 wormhole：浏览器任务之间留间隔再启动下一个
+    if (lastBrowserStartTime > 0 && since < taskInterval) {
       if (!shiftTimer) {
         shiftTimer = setTimeout(() => {
           shiftTimer = null;
@@ -162,27 +198,13 @@ function pump(immediate = false): void {
     }
   }
 
-  const next = queue.shift();
-  if (!next) return;
-
-  lastStartTime = Date.now();
+  lastBrowserStartTime = Date.now();
   taskInterval = Math.random() * 2000 + 500;
-  runningCount++;
-  void execute(next).finally(() => {
-    runningCount--;
-    if (activeTaskId === next.taskId) {
-      activeTaskId = null;
-      activeCancel = null;
-    }
-    pump(false);
-  });
+  start(next);
 }
 
-async function execute(item: QueuedTask): Promise<void> {
+async function execute(item: QueuedTask, token: CancelToken): Promise<void> {
   const { taskId, config } = item;
-  const token = createCancelToken();
-  activeTaskId = taskId;
-  activeCancel = token;
 
   sendFn({
     type: ToClient.TaskProgress,

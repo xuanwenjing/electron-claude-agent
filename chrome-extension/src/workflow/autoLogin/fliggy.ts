@@ -41,11 +41,11 @@ function prepareLoginForm(): AutoLoginResult {
   return { success: true };
 }
 
-export async function tryAutoLoginFliggy(tabId: number, emit: EmitFn, configAccount?: string): Promise<AutoLoginResult> {
-  // 未配置时用之前登录态下从页面接口捕获的 userNick
-  const account = configAccount || (await getCachedHotelInfo(HotelPlatform.Fliggy))?.value.hotelInfo.userNick;
+export async function tryAutoLoginFliggy(tabId: number, emit: EmitFn): Promise<AutoLoginResult> {
+  // 账号取之前登录态下从页面接口捕获的 userNick
+  const account = (await getCachedHotelInfo(HotelPlatform.Fliggy))?.value.hotelInfo.userNick;
   if (!account) {
-    return { success: false, errorMessage: "飞猪自动登录需要账号：请配置 WorkflowConfig.loginAccount，或先手动登录一次飞猪 EBK" };
+    return { success: false, errorMessage: "飞猪自动登录需要账号：请先手动登录一次飞猪 EBK" };
   }
 
   await chrome.scripting.executeScript({ target: { tabId }, world: "MAIN", func: submitAccount, args: [account] });

@@ -1,4 +1,5 @@
 export { runWorkflow } from "./runWorkflow";
+export { TaskKind, classifyWorkflow } from "./taskKind";
 export { ADOPT_WAIT_MS, adoptStartupWindowAsCrawlWindow, isCrawlWindow } from "./browser";
 export { captureHotelInfoFromXhr } from "./hotelInfo";
 export { pageFetch, handleApiFetch } from "./api";
