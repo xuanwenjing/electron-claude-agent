@@ -21,8 +21,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === "XHR_RESPONSE") {
-    onXhrResponse(message.data as XhrCapturePayload, sender?.tab?.id);
-    void captureHotelInfoFromXhr(message.data as XhrCapturePayload);
+    const data = message.data as XhrCapturePayload | undefined;
+    onXhrResponse(data, sender?.tab?.id);
+    if (!data?.error) void captureHotelInfoFromXhr(data);
     sendResponse({ ok: true });
     return true;
   }

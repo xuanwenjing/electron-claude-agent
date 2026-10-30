@@ -15,10 +15,12 @@ import {
   acquireCrawlTab,
   assertSiteAllowed,
   blockedOriginOf,
+  describePage,
   ensureContentReady,
   ensurePageFetchProxy,
   getOrCreateCrawlWindow,
   navigateCrawlTab,
+  pageLoadProblem,
   removeTab,
   removeTabByUrlInWindow,
   sendContentTask,
@@ -27,6 +29,7 @@ import {
 import {
   createCollector,
   clearNetworkCaptureContext,
+  describeCaptureMiss,
   getCaptureHits,
   setNetworkCaptureContext,
 } from "./collect";
@@ -137,15 +140,11 @@ export async function runWorkflow(
         }
         const left = missing();
         if (!left.length) return;
-        let pageUrl = "";
-        try {
-          pageUrl = (await chrome.tabs.get(tabId)).url || "";
-        } catch {
-          /* ignore */
-        }
-        const message =
-          `${timeoutMs / 1000}s 内未捕获到 ${left.map((name) => `${name}（${workflowItem.capture![name]}）`).join("、")}` +
-          `${pageUrl ? `，页面URL: ${pageUrl}` : ""}`;
+        const message = `${timeoutMs / 1000}s 内未捕获到 ${left.map((name) => `${name}（${workflowItem.capture![name]}）`).join("、")}`;
+        emit(`[capture 排查] ${message}`);
+        const missingRules = Object.fromEntries(left.map((name) => [name, workflowItem.capture![name]]));
+        for (const line of describeCaptureMiss(tabId, missingRules)) emit(`[capture 排查] ${line}`);
+        emit(`[capture 排查] ${await describePage(tabId)}`);
         if (!workflowItem.allow_exception) throw new Error(message);
         emit(`忽略异常: ${message}`);
       };
@@ -170,6 +169,8 @@ export async function runWorkflow(
             tabId = navigated.id!;
             bindCapture(workflowItem);
             await waitTabComplete(tabId, emit);
+            const loadProblem = await pageLoadProblem(tabId);
+            if (loadProblem) throw new Error(loadProblem);
             await ensureContentReady(tabId);
             await ensurePageFetchProxy(tabId);
             return collectHotelInfo(tabId, collector, emit, navigatedAt);

@@ -5,9 +5,12 @@
  * - 规则不合法直接抛错（不会退化成匹配全部）
  */
 
-type UrlMatcher = (url: string) => boolean;
+interface CompiledRule {
+  re: RegExp;
+  conditions: [string, string][];
+}
 
-const cache = new Map<string, UrlMatcher>();
+const cache = new Map<string, CompiledRule[]>();
 
 /** URL 的 query 参数（忽略 #hash） */
 export function parseQuery(url: string): Record<string, string> {
@@ -18,7 +21,7 @@ export function parseQuery(url: string): Record<string, string> {
   return out;
 }
 
-function compileOne(rule: string): UrlMatcher {
+function compileOne(rule: string): CompiledRule {
   const [path, query = ""] = rule.split("?");
   let re: RegExp;
   try {
@@ -28,32 +31,50 @@ function compileOne(rule: string): UrlMatcher {
   }
   const conditions: [string, string][] = [];
   new URLSearchParams(query).forEach((value, key) => conditions.push([key, value]));
-  return (url) => {
-    if (!re.test(url.split("?")[0])) return false;
-    if (!conditions.length) return true;
-    const actual = parseQuery(url);
-    return conditions.every(
-      ([key, value]) => key in actual && (value === "" || value === "*" || actual[key] === value),
-    );
-  };
+  return { re, conditions };
+}
+
+/** 不满足的参数条件说明；全部满足返回空数组 */
+function failedConditions(conditions: [string, string][], url: string): string[] {
+  if (!conditions.length) return [];
+  const actual = parseQuery(url);
+  return conditions.flatMap(([key, value]) => {
+    if (!(key in actual)) return [`缺少参数 ${key}`];
+    if (value === "" || value === "*" || actual[key] === value) return [];
+    return [`${key}=${actual[key]}（规则要求 ${value}）`];
+  });
 }
 
 /** 编译并缓存；规则不合法抛错，步骤开始前校验配置也用它 */
-export function compileUrlRule(rule: string): UrlMatcher {
-  let matcher = cache.get(rule);
-  if (!matcher) {
-    const parts = rule
+export function compileUrlRule(rule: string): CompiledRule[] {
+  let parts = cache.get(rule);
+  if (!parts) {
+    parts = rule
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
       .map(compileOne);
     if (!parts.length) throw new Error(`URL 规则为空: ${JSON.stringify(rule)}`);
-    matcher = (url) => parts.some((match) => match(url));
-    cache.set(rule, matcher);
+    cache.set(rule, parts);
   }
-  return matcher;
+  return parts;
 }
 
 export function urlMatch(url: string | null | undefined, rule: string): boolean {
-  return !!url && compileUrlRule(rule)(url);
+  if (!url) return false;
+  const path = url.split("?")[0];
+  return compileUrlRule(rule).some(({ re, conditions }) => re.test(path) && !failedConditions(conditions, url).length);
+}
+
+/** 路径命中但参数不满足时返回原因（排查用）；路径都没命中或已匹配返回 null */
+export function urlRuleMismatch(url: string, rule: string): string | null {
+  const path = url.split("?")[0];
+  const reasons: string[] = [];
+  for (const { re, conditions } of compileUrlRule(rule)) {
+    if (!re.test(path)) continue;
+    const failed = failedConditions(conditions, url);
+    if (!failed.length) return null;
+    reasons.push(failed.join("、"));
+  }
+  return reasons.length ? reasons.join("；") : null;
 }

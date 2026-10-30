@@ -1,5 +1,7 @@
 export {
   waitTabComplete,
+  describePage,
+  pageLoadProblem,
   ensureContentReady,
   ensurePageFetchProxy,
   sendContentTask,

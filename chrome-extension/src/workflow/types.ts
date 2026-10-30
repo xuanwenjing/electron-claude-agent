@@ -166,6 +166,10 @@ export interface XhrCapturePayload {
   headers?: Record<string, string>;
   responseURL?: string;
   cookie?: string;
+  /** HTTP 状态码；请求未完成为 0 */
+  status?: number;
+  /** 请求失败：XHR 的 error / timeout / abort，或 fetch 的异常信息 */
+  error?: string;
 }
 
 export interface NetworkUpdatePayload {

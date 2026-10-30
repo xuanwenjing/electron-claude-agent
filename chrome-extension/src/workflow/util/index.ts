@@ -7,4 +7,4 @@ export {
   getDeepValue,
   deepResolve,
 } from "./eval";
-export { urlMatch, compileUrlRule, parseQuery } from "./urlMatch";
+export { urlMatch, urlRuleMismatch, compileUrlRule, parseQuery } from "./urlMatch";

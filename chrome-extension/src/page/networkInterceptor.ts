@@ -34,6 +34,8 @@ function main(): void {
     response: unknown,
     headers: unknown,
     responseURL: unknown,
+    status?: number,
+    error?: string,
   ) => {
     try {
       window.postMessage(
@@ -47,13 +49,15 @@ function main(): void {
             headers,
             responseURL,
             cookie: getDocumentCookie(),
+            status,
+            error,
           },
         },
         "*",
       );
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "DataCloneError") {
-        return sendResponseData(api, method, "{}", response, headers, responseURL);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "DataCloneError") {
+        return sendResponseData(api, method, "{}", response, headers, responseURL, status, error);
       }
     }
   };
@@ -108,6 +112,7 @@ function main(): void {
           responseData,
           this._crawlRequestHeaders,
           this.responseURL,
+          this.status,
         );
       } catch {
         sendResponseData(
@@ -117,9 +122,24 @@ function main(): void {
           { code: this.status || 0 },
           this._crawlRequestHeaders,
           this.responseURL,
+          this.status,
         );
       }
     });
+    for (const failure of ["error", "timeout", "abort"]) {
+      this.addEventListener(failure, function (this: XMLHttpRequest) {
+        sendResponseData(
+          this._crawlUrl,
+          this._crawlMethod,
+          this._crawlBody,
+          { code: 0 },
+          this._crawlRequestHeaders,
+          this.responseURL,
+          this.status,
+          failure,
+        );
+      });
+    }
 
     return originalXHRSend.apply(this, [body]);
   };
@@ -159,26 +179,27 @@ function main(): void {
       /* ignore */
     }
 
-    const response = await originalFetch(input, init);
+    let response: Response;
+    try {
+      response = await originalFetch(input, init);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "network error";
+      sendResponseData(url, method, body, { code: 0, error: message }, headers, url, 0, message);
+      throw err;
+    }
     const cloned = response.clone();
     cloned
       .text()
       .then((text) => {
         try {
-          sendResponseData(url, method, body, JSON.parse(text), headers, url);
+          sendResponseData(url, method, body, JSON.parse(text), headers, url, response.status);
         } catch {
-          sendResponseData(url, method, body, { code: response.status || 0, raw: text }, headers, url);
+          sendResponseData(url, method, body, { code: response.status || 0, raw: text }, headers, url, response.status);
         }
       })
       .catch((err: Error) => {
-        sendResponseData(
-          url,
-          method,
-          body,
-          { code: 0, error: err?.message || "network error" },
-          headers,
-          url,
-        );
+        const message = err?.message || "network error";
+        sendResponseData(url, method, body, { code: 0, error: message }, headers, url, response.status, message);
       });
 
     return response;
