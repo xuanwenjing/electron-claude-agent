@@ -6,9 +6,7 @@
     {
       "type": "navigate",
       "url": "https://ebooking.ctrip.com/comment/commentList",
-      "event": "list_template",
-      "need_collect": true,
-      "reg_exp": "getCommentList",
+      "name": "list_template",
       "capture": { "listHit": "getCommentList" }
     },
     {
@@ -19,9 +17,7 @@
       "children": [
         {
           "type": "call_api",
-          "event": "comment_page",
-          "need_collect": true,
-          "reg_exp": "getCommentList",
+          "name": "comment_page",
           "capture": { "pageHit": "getCommentList" },
           "call_api_params": {
             "url": "https://ebooking.ctrip.com/restapi/soa2/26353/getCommentList?_fxpcqlniredt=${listHit.queryParams._fxpcqlniredt}",
@@ -42,7 +38,7 @@
     },
     {
       "type": "run_agent",
-      "event": "reply_draft",
+      "name": "reply_draft",
       "list": "${comments || []}",
       "item_var": "comment",
       "concurrency": 3,

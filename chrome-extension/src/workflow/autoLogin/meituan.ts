@@ -93,11 +93,24 @@ async function tryNewLoginPage(tabId: number): Promise<AutoLoginResult> {
   return fillAndSubmit(tabId, 'input[placeholder="输入账号"]', 'input[placeholder="输入密码"]', null);
 }
 
+/** 登录 iframe 由页面脚本在 load 之后才插入 */
+const LOGIN_IFRAME_WAIT_MS = 10000;
+
+async function waitLoginFrame(tabId: number): Promise<chrome.webNavigation.GetAllFrameResultDetails | null> {
+  const deadline = Date.now() + LOGIN_IFRAME_WAIT_MS;
+  while (Date.now() < deadline) {
+    const frames = await chrome.webNavigation.getAllFrames({ tabId });
+    const loginFrame = frames?.find((f) => f.url.includes("epassport.meituan.com"));
+    if (loginFrame) return loginFrame;
+    await sleep(500);
+  }
+  return null;
+}
+
 /** 旧版：登录表单在跨域 iframe 中，密码管理器无法填充，直接把标签导航到 iframe 地址 */
 async function tryIframeLoginPage(tabId: number, emit: EmitFn): Promise<AutoLoginResult> {
-  const frames = await chrome.webNavigation.getAllFrames({ tabId });
-  const loginFrame = frames?.find((f) => f.url.includes("epassport.meituan.com"));
-  if (!loginFrame) return { success: false, errorMessage: "未找到美团登录 iframe" };
+  const loginFrame = await waitLoginFrame(tabId);
+  if (!loginFrame) return { success: false, errorMessage: `${LOGIN_IFRAME_WAIT_MS / 1000}s 内未找到美团登录 iframe` };
 
   await chrome.tabs.update(tabId, { url: loginFrame.url });
   await sleep(500);

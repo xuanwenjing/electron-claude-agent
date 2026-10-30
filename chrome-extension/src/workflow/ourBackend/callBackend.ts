@@ -1,7 +1,6 @@
 import { Request } from "../../shared/request";
 import type { Collector, EmitFn, WorkflowItem } from "../types";
 import { getDeepValue, resolveMaybeExpr } from "../util";
-import { collectNetworkHit } from "../collect";
 
 const api = new Request();
 
@@ -36,20 +35,5 @@ export async function handleCallBackend(
     throw new Error(`call_backend ${method} ${url} 失败 code=${body?.code}: ${body?.msg || body?.message || ""}`);
   }
 
-  // need_collect 与 call_api 网络命中同一套：写入 collected[event]
-  const qs = query
-    ? new URLSearchParams(
-        Object.entries(query)
-          .filter(([, v]) => v != null)
-          .map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]),
-      ).toString()
-    : "";
-  collectNetworkHit(collector, workflowItem, {
-    requestData: data ?? {},
-    responseData: body,
-    api: qs ? `${url}${url.includes("?") ? "&" : "?"}${qs}` : url,
-    method,
-    headers: params.headers ?? {},
-  });
   return body;
 }

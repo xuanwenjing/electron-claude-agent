@@ -109,17 +109,19 @@ export async function getCachedHotelInfo(platform: HotelPlatform): Promise<Cache
   return (await readCache())[platform] ?? null;
 }
 
-/** 等待 since 之后捕获到的酒店信息；超时返回 null */
+/** 等待 since 之后捕获到的酒店信息；shouldStop 为真（如页面跳到登录页）提前返回 stopped */
 export async function waitFreshHotelInfo(
   platform: HotelPlatform,
   since: number,
   timeoutMs: number,
-): Promise<CacheEntry | null> {
+  shouldStop: () => Promise<boolean>,
+): Promise<{ entry: CacheEntry | null; stopped: boolean }> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const entry = await getCachedHotelInfo(platform);
-    if (entry && entry.savedAt >= since) return entry;
+    if (entry && entry.savedAt >= since) return { entry, stopped: false };
+    if (await shouldStop()) return { entry: null, stopped: true };
     await sleep(500);
   }
-  return null;
+  return { entry: null, stopped: await shouldStop() };
 }

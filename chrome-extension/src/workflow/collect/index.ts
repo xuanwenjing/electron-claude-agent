@@ -1,13 +1,7 @@
+export { createCollector } from "./collector";
 export {
-  createCollector,
-  resolveEvent,
-  pushCollected,
-  collectNetworkHit,
-  isDataComplete,
-} from "./collector";
-export {
-  buildMatchApiList,
   setNetworkCaptureContext,
   clearNetworkCaptureContext,
+  getCaptureHits,
   onXhrResponse,
 } from "./networkCapture";

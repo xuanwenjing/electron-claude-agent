@@ -24,8 +24,8 @@ import {
 } from "./browser";
 import {
   createCollector,
-  isDataComplete,
   clearNetworkCaptureContext,
+  getCaptureHits,
   setNetworkCaptureContext,
 } from "./collect";
 import { tryAutoLogin } from "./autoLogin";
@@ -34,6 +34,7 @@ import {
   assertLoggedIn,
   collectHotelInfo,
   getMissingLoginPlatform,
+  loginPageError,
   type HotelInfoResult,
 } from "./hotelInfo";
 import type { CancelToken } from "./util";
@@ -42,14 +43,15 @@ import { TaskErrorCode } from "../../../src/shared/bridgeProtocol";
 import { applyStepOutputs, assertVarName, validateStepVariables } from "./variables";
 import { TaskKind, classifyWorkflow } from "./taskKind";
 
-/** 对齐 common.ts：默认等待与 wait_before_finish 叠加 */
-async function runDefaultWait(
-  workflowItem: WorkflowItem,
-  needCollectMs: number,
-  idleMs: number,
-  token?: CancelToken | null,
-): Promise<void> {
-  await cancellableSleep(workflowItem.need_collect ? needCollectMs : idleMs, token);
+/** 没有 capture 的步骤，动作后固定等待 */
+const IDLE_WAIT_MS = 3000;
+/** 有 capture 的步骤，等待全部命中的默认超时 */
+const NAVIGATE_CAPTURE_TIMEOUT_MS = 15000;
+const CAPTURE_TIMEOUT_MS = 10000;
+const CAPTURE_POLL_MS = 300;
+
+function stepLabel(item: WorkflowItem): string {
+  return `${item.type}${item.name ? ` ${item.name}` : ""}`;
 }
 
 export async function runWorkflow(
@@ -114,9 +116,41 @@ export async function runWorkflow(
         emit(`采集窗口 windowId=${windowId}，任务标签 tabId=${tabId}（首标签保活；结束后关闭任务标签）`);
       }
 
+      /** 动作后：有 capture 则等到本步全部命中（超时失败），没有则固定等待 */
+      const waitAfterAction = async (workflowItem: WorkflowItem, captureTimeoutMs: number): Promise<void> => {
+        const configured =
+          workflowItem.wait == null || workflowItem.wait === ""
+            ? undefined
+            : Number(resolveMaybeExpr(collector.variables, workflowItem.wait));
+        const names = Object.keys(workflowItem.capture ?? {});
+        if (!names.length || tabId == null) {
+          await cancellableSleep(configured ?? IDLE_WAIT_MS, stepToken);
+          return;
+        }
+        const timeoutMs = configured ?? captureTimeoutMs;
+        const deadline = Date.now() + timeoutMs;
+        const missing = () => names.filter((name) => !getCaptureHits(tabId!).has(name));
+        while (missing().length && Date.now() < deadline) {
+          await cancellableSleep(CAPTURE_POLL_MS, stepToken);
+        }
+        const left = missing();
+        if (!left.length) return;
+        let pageUrl = "";
+        try {
+          pageUrl = (await chrome.tabs.get(tabId)).url || "";
+        } catch {
+          /* ignore */
+        }
+        const message =
+          `${timeoutMs / 1000}s 内未捕获到 ${left.map((name) => `${name}（${workflowItem.capture![name]}）`).join("、")}` +
+          `${pageUrl ? `，页面URL: ${pageUrl}` : ""}`;
+        if (!workflowItem.allow_exception) throw new Error(message);
+        emit(`忽略异常: ${message}`);
+      };
+
       const runStep = async (workflowItem: WorkflowItem): Promise<void> => {
         if (stepToken.cancelled) throw new TaskCancelledError();
-        emit(`步骤 ${workflowItem.type}: ${workflowItem.event || ""}`);
+        emit(`步骤 ${stepLabel(workflowItem)}`);
         validateStepVariables(workflowItem);
         bindCapture(workflowItem);
         let stepResult: unknown;
@@ -152,10 +186,10 @@ export async function runWorkflow(
             }
           }
           assertLoggedIn(config, url, hotelInfo, autoLoginError);
-          await runDefaultWait(workflowItem, 15000, 3000, stepToken);
+          await waitAfterAction(workflowItem, NAVIGATE_CAPTURE_TIMEOUT_MS);
         } else if (workflowItem.type === "call_api") {
           stepResult = await handleApiFetch(tabId, collector, workflowItem, emit, stepToken);
-          await runDefaultWait(workflowItem, 5000, 3000, stepToken);
+          await waitAfterAction(workflowItem, CAPTURE_TIMEOUT_MS);
         } else if (workflowItem.type === "call_backend") {
           stepResult = await handleCallBackend(collector, workflowItem, emit);
         } else if (workflowItem.type === "click") {
@@ -168,7 +202,7 @@ export async function runWorkflow(
               throw new Error(commonTaskRes?.errorMessage || "click 失败");
             }
           }
-          await runDefaultWait(workflowItem, 10000, 3000, stepToken);
+          await waitAfterAction(workflowItem, CAPTURE_TIMEOUT_MS);
         } else if (workflowItem.type === "run_agent") {
           stepResult = await handleRunAgent(collector, workflowItem, emit, { taskId, token: stepToken });
         } else if (workflowItem.type === "loop") {
@@ -186,15 +220,6 @@ export async function runWorkflow(
         }
 
         applyStepOutputs(collector, workflowItem, stepResult, emit);
-
-        const complete = await isDataComplete(collector, workflowItem, tabId);
-        if (!complete.success) {
-          if (workflowItem.allow_exception) {
-            emit(`忽略异常: ${complete.errorMessage}`);
-          } else {
-            throw new Error(complete.errorMessage);
-          }
-        }
 
         if (workflowItem.pass_condition) {
           const ok = !!safeEval(collector.variables, workflowItem.pass_condition);
@@ -294,7 +319,7 @@ export async function runWorkflow(
             throw new Error(`skip_if 求值失败: ${error instanceof Error ? error.message : String(error)}`);
           }
           if (skip) {
-            emit(`跳过 ${item.type}${item.event ? ` ${item.event}` : ""}: ${item.skip_if}`);
+            emit(`跳过 ${stepLabel(item)}: ${item.skip_if}`);
             return;
           }
         }
@@ -309,19 +334,21 @@ export async function runWorkflow(
       emit("采集完成");
       return {
         ok: true,
-        data: {
-          collected: collector.data,
-          variables: collector.variables,
-        },
+        data: { variables: collector.variables },
       };
     } catch (err) {
       if (token?.cancelled || (err instanceof TaskCancelledError && closedTabId == null)) {
         emit("任务已取消");
         return { ok: false, error: "任务已取消", errorCode: TaskErrorCode.Cancelled, data: null };
       }
-      if (closedTabId == null && err instanceof NotLoggedInError) {
-        emit(err.message);
-        return { ok: false, error: err.message, errorCode: TaskErrorCode.NotLoggedIn, data: null };
+      const notLoggedIn =
+        closedTabId != null ? null : err instanceof NotLoggedInError ? err : await loginPageError(tabId);
+      if (notLoggedIn) {
+        if (!(err instanceof NotLoggedInError)) {
+          emit(`步骤失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        emit(notLoggedIn.message);
+        return { ok: false, error: notLoggedIn.message, errorCode: TaskErrorCode.NotLoggedIn, data: null };
       }
       if (closedTabId != null) {
         lastError = `任务标签页被关闭（tabId=${closedTabId}）`;

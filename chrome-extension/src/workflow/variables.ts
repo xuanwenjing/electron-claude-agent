@@ -9,7 +9,7 @@
  * 另有 loop 的 item_var / index_var（只在循环内有效）和引擎内置变量（以 _ 开头，如 _hotelInfo）。
  */
 import type { Collector, EmitFn, NetworkUpdatePayload, WorkflowItem } from "./types";
-import { getDeepValue, urlMatch } from "./util";
+import { compileUrlRule, getDeepValue, parseQuery, urlMatch } from "./util";
 
 const VAR_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
 
@@ -71,36 +71,47 @@ export function captureRules(workflowItem: WorkflowItem): string[] {
   return workflowItem.capture ? Object.values(workflowItem.capture).filter(Boolean) : [];
 }
 
-/** 网络命中：写入所有 URL 规则匹配的 capture 变量（多次命中保留最后一次） */
+/** 网络命中：写入所有 URL 规则匹配的 capture 变量（多次命中保留最后一次），返回写入的变量名 */
 export function captureNetworkHit(
   collector: Collector,
   workflowItem: WorkflowItem,
   payload: NetworkUpdatePayload,
   emit: EmitFn,
-): void {
-  if (!workflowItem.capture) return;
+): string[] {
+  const names: string[] = [];
+  if (!workflowItem.capture) return names;
   for (const [name, rule] of Object.entries(workflowItem.capture)) {
     if (!rule || !urlMatch(payload.api, rule)) continue;
-    const queryParams: Record<string, string> = {};
-    new URLSearchParams(String(payload.api).split("?")[1] || "").forEach((value, key) => {
-      queryParams[key] = value;
-    });
     const captured: CapturedRequest = {
       url: payload.api,
       method: payload.method,
       headers: payload.headers || {},
-      queryParams,
+      queryParams: parseQuery(String(payload.api)),
       payload: payload.requestData || {},
       response: payload.responseData || {},
       cookies: payload.cookies || {},
     };
     setVariable(collector, assertVarName(name, "capture"), captured, emit, `capture ${rule}`);
+    names.push(name);
+  }
+  return names;
+}
+
+function assertUrlRule(rule: unknown, field: string): void {
+  if (typeof rule !== "string") throw new Error(`${field} 必须是 URL 规则字符串: ${JSON.stringify(rule)}`);
+  try {
+    compileUrlRule(rule);
+  } catch (err) {
+    throw new Error(`${field}: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 const REMOVED_FIELDS: Record<string, string> = {
   global_variables: "{name,url} 改用 capture，{name,value} 改用 set",
   loop_index_var: "改用 index_var",
+  event: "不再有 collected 采集结果，数据都在变量里；步骤名写 name",
+  need_collect: "网络请求用 capture（会等到命中为止），步骤返回值用 save_as",
+  reg_exp: "改用 capture 的 URL 规则",
 };
 
 /** 步骤开始前校验变量配置，配置错误尽早报出 */
@@ -128,7 +139,13 @@ export function validateStepVariables(workflowItem: WorkflowItem): void {
   if (workflowItem.skip_if !== undefined && typeof workflowItem.skip_if !== "string") {
     throw new Error("skip_if 必须是表达式字符串，如 \"${x == null}\"");
   }
-  for (const name of Object.keys(workflowItem.capture ?? {})) assertVarName(name, "capture");
+  for (const [name, rule] of Object.entries(workflowItem.capture ?? {})) {
+    assertVarName(name, "capture");
+    assertUrlRule(rule, `capture.${name}`);
+  }
+  if (workflowItem.close_tab_before_finish) {
+    assertUrlRule(workflowItem.close_tab_before_finish, "close_tab_before_finish");
+  }
   if (workflowItem.save_as !== undefined) assertVarName(workflowItem.save_as, "save_as");
   for (const name of Object.keys(workflowItem.set ?? {})) assertVarName(name, "set");
   for (const name of Object.keys(workflowItem.append ?? {})) assertVarName(name, "append");

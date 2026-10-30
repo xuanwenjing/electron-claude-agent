@@ -48,8 +48,9 @@ export async function tryAutoLogin(
     if (!(await isOnLoginPage(tabId, platform))) {
       await chrome.tabs.update(tabId, { url: LOGIN_URLS[platform][0] });
       await sleep(500);
-      await waitTabComplete(tabId, emit);
     }
+    // 可能刚跳到登录页还在加载（单页应用重定向），同样要等加载完
+    await waitTabComplete(tabId, emit);
     result = await impl(tabId, emit);
   } catch (err) {
     result = { success: false, errorMessage: err instanceof Error ? err.message : String(err) };

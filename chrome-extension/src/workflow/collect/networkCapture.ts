@@ -1,16 +1,17 @@
 /**
- * 步骤级网络采集上下文：对齐 CommentCollectHandler.setWorkflowParams + handleXhrResponse
+ * 步骤级网络捕获上下文：页面请求命中本步 capture 规则时写入变量，并记下本步已命中的变量名
  */
 import type { Collector, EmitFn, WorkflowItem, XhrCapturePayload } from "../types";
 import { urlMatch } from "../util";
 import { captureNetworkHit, captureRules } from "../variables";
-import { collectNetworkHit } from "./collector";
 
 interface ActiveCapture {
   matchApiList: string[];
   workflowItem: WorkflowItem;
   collector: Collector;
   emit: EmitFn;
+  /** 本次绑定后已命中的 capture 变量名 */
+  hits: Set<string>;
 }
 
 /** 任务标签 tabId → 该任务当前步骤的捕获上下文；并行任务各绑各的标签，按请求来源标签分发 */
@@ -45,15 +46,7 @@ function parseBody(body: unknown): unknown {
   }
 }
 
-export function buildMatchApiList(workflowItem: WorkflowItem): string[] {
-  const list: string[] = [];
-  if (workflowItem.need_collect && workflowItem.reg_exp) {
-    list.push(workflowItem.reg_exp);
-  }
-  list.push(...captureRules(workflowItem));
-  return list;
-}
-
+/** 每次绑定都清空已命中记录（navigate 重新打开页面也会重新绑定） */
 export function setNetworkCaptureContext(opts: {
   tabId: number;
   workflowItem: WorkflowItem;
@@ -61,10 +54,11 @@ export function setNetworkCaptureContext(opts: {
   emit?: EmitFn;
 }): void {
   captures.set(opts.tabId, {
-    matchApiList: buildMatchApiList(opts.workflowItem),
+    matchApiList: captureRules(opts.workflowItem),
     workflowItem: opts.workflowItem,
     collector: opts.collector,
     emit: opts.emit || (() => {}),
+    hits: new Set(),
   });
 }
 
@@ -72,28 +66,33 @@ export function clearNetworkCaptureContext(tabId: number): void {
   captures.delete(tabId);
 }
 
+/** 本步（最近一次绑定后）已命中的 capture 变量名 */
+export function getCaptureHits(tabId: number): ReadonlySet<string> {
+  return captures.get(tabId)?.hits ?? new Set();
+}
+
 export function onXhrResponse(data: XhrCapturePayload | undefined, senderTabId?: number): void {
   if (senderTabId == null || !data?.api) return;
   const capture = captures.get(senderTabId);
   if (!capture) return;
 
-  const { matchApiList, workflowItem, collector, emit } = capture;
+  const { matchApiList, workflowItem, collector, emit, hits } = capture;
   if (!matchApiList.length) return;
   if (!matchApiList.some((pattern) => urlMatch(data.api, pattern))) return;
 
-  const requestData = parseBody(data.body);
-  const responseData = data.response;
-  const cookies = parseCookieToObject(data.cookie);
-
   emit(`网络命中: ${data.method || "GET"} ${data.api}`);
-  const payload = {
-    requestData,
-    responseData,
-    api: data.api,
-    method: data.method,
-    headers: data.headers || {},
-    cookies,
-  };
-  captureNetworkHit(collector, workflowItem, payload, emit);
-  collectNetworkHit(collector, workflowItem, payload);
+  const names = captureNetworkHit(
+    collector,
+    workflowItem,
+    {
+      requestData: parseBody(data.body),
+      responseData: data.response,
+      api: data.api,
+      method: data.method,
+      headers: data.headers || {},
+      cookies: parseCookieToObject(data.cookie),
+    },
+    emit,
+  );
+  names.forEach((name) => hits.add(name));
 }

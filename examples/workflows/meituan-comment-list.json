@@ -1,0 +1,40 @@
+{
+  "maxRetry": 1,
+  "platform": "meituan",
+  "needLogin": true,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://me.meituan.com/ebooking/merchant/comment-manage-react#/home",
+      "name": "list_template",
+      "capture": { "listHit": "queryGeneralCommentInfo?replyType=0" }
+    },
+    {
+      "type": "loop",
+      "max_count": 2,
+      "index_var": "page",
+      "break_condition": "${(pageRes.data.commentList || []).length == 0}",
+      "children": [
+        {
+          "type": "call_api",
+          "name": "comment_page",
+          "save_as": "pageRes",
+          "call_api_params": {
+            "url": "https://me.meituan.com/api/gw/v1/base/comments/queryGeneralCommentInfo",
+            "method": "GET",
+            "sign": "mtgsig",
+            "headers": { "__ref": "${listHit.headers}" },
+            "query_params": {
+              "__ref": "${listHit.queryParams}",
+              "offset": "${page + 1}"
+            }
+          },
+          "pass_condition": "${pageRes.data.commentList != null}",
+          "set": {
+            "comments": "${(comments || []).concat(pageRes.data.commentList || [])}"
+          }
+        }
+      ]
+    }
+  ]
+}

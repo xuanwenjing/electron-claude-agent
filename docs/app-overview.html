@@ -1468,10 +1468,10 @@
         }
       },
       workflow: [
-        { type: "navigate", url: "https://ebooking.ctrip.com/comment/commentList", event: "comments", need_collect: true, reg_exp: "getComment" },
-        { type: "click", selector: "button.reply", event: "open_editor" },
-        { type: "input", selector: "textarea", value: "{{replyText}}", event: "fill_reply" },
-        { type: "click", selector: "button.submit", event: "submit", need_collect: true, reg_exp: "setCommentReply" }
+        { type: "navigate", url: "https://ebooking.ctrip.com/comment/commentList", name: "comments", capture: { comments: "getComment" } },
+        { type: "click", selector: "button.reply", name: "open_editor" },
+        { type: "input", selector: "textarea", value: "{{replyText}}", name: "fill_reply" },
+        { type: "click", selector: "button.submit", name: "submit", capture: { submitRes: "setCommentReply" } }
       ]
     };
 

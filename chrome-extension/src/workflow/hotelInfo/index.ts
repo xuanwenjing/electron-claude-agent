@@ -4,7 +4,7 @@
  * - 携程 EBK / 携程酒店：在页面 MAIN world 提取
  * - 美团 / 飞猪 / 抖音：取页面接口被动捕获的数据（见 xhrHotelInfo）
  */
-import { PLATFORM_LABELS, detectPlatform, isLoginUrl } from "../platform";
+import { PLATFORM_LABELS, detectPlatform, isLoginUrl, isOnLoginPage, loginPlatformOf } from "../platform";
 import { HotelPlatform, type Collector, type EmitFn } from "../types";
 import { setVariable } from "../variables";
 import { getCachedHotelInfo, waitFreshHotelInfo } from "./xhrHotelInfo";
@@ -108,6 +108,20 @@ export class NotLoggedInError extends Error {
   }
 }
 
+/** 步骤失败时兜底：任务标签停在平台登录页（中途登录态失效）则返回未登录错误，否则 null */
+export async function loginPageError(tabId: number | null): Promise<NotLoggedInError | null> {
+  if (tabId == null) return null;
+  let url: string | undefined;
+  try {
+    url = (await chrome.tabs.get(tabId)).url;
+  } catch {
+    return null;
+  }
+  const platform = loginPlatformOf(url);
+  if (!platform) return null;
+  return new NotLoggedInError(`${PLATFORM_LABELS[platform]}未登录（页面已跳转到登录页），请先在浏览器中登录后再执行任务`);
+}
+
 export type HotelInfoResult = { platform: HotelPlatform; isLogin: boolean } | null;
 
 const XHR_HOTEL_INFO_WAIT_MS = 10000;
@@ -128,20 +142,28 @@ function saveHotelInfo(
 
 /**
  * 美团 / 飞猪 / 抖音：落在登录页即未登录；否则等本次导航后页面接口捕获的酒店信息，
- * 超时则退回上一次缓存。
+ * 等待期间页面跳到登录页（单页应用加载完后才发现未登录）同样视为未登录；超时则退回上一次缓存。
  */
 async function collectXhrHotelInfo(
+  tabId: number,
   tabUrl: string | undefined,
   platform: HotelPlatform,
   collector: Collector,
   emit: EmitFn,
   navigatedAt: number,
 ): Promise<HotelInfoResult> {
-  if (isLoginUrl(tabUrl, platform)) {
+  const notLoggedIn = (): HotelInfoResult => {
     emit(`${PLATFORM_LABELS[platform]}未登录`);
     return { platform, isLogin: false };
-  }
-  const fresh = await waitFreshHotelInfo(platform, navigatedAt, XHR_HOTEL_INFO_WAIT_MS);
+  };
+  if (isLoginUrl(tabUrl, platform)) return notLoggedIn();
+  const { entry: fresh, stopped } = await waitFreshHotelInfo(
+    platform,
+    navigatedAt,
+    XHR_HOTEL_INFO_WAIT_MS,
+    () => isOnLoginPage(tabId, platform).catch(() => false),
+  );
+  if (stopped) return notLoggedIn();
   const entry = fresh ?? (await getCachedHotelInfo(platform));
   if (entry) {
     saveHotelInfo(collector, platform, { ...entry.value, isLogin: true }, emit, fresh ? "" : "（缓存）");
@@ -167,7 +189,7 @@ export async function collectHotelInfo(
   const platform = detectPlatform(tab.url);
   if (!platform) return null;
   if (platform !== HotelPlatform.CtripEbk && platform !== HotelPlatform.CtripHotel) {
-    return collectXhrHotelInfo(tab.url, platform, collector, emit, navigatedAt);
+    return collectXhrHotelInfo(tabId, tab.url, platform, collector, emit, navigatedAt);
   }
 
   try {

@@ -1,5 +1,4 @@
 import type { RunAgentParams } from "../../../../src/shared/bridgeProtocol";
-import { pushCollected, resolveEvent } from "../collect/collector";
 import type { Collector, EmitFn, RunAgentStepParam, WorkflowItem } from "../types";
 import type { CancelToken } from "../util";
 import { TaskCancelledError, getDeepValue, isWholeExpr, resolveMaybeExpr, safeEval } from "../util";
@@ -146,15 +145,11 @@ async function runBatch(
       emit(`run_agent 批量有 ${errors.length} 项失败（未配置 save_as，错误不写入变量）`);
     }
   }
-  if (workflowItem.need_collect) {
-    const event = resolveEvent(collector, workflowItem, "run_agent");
-    for (const result of results) if (result !== null) pushCollected(collector, event, result);
-  }
   emit(`run_agent 批量完成：成功 ${items.length - errors.length}，失败 ${errors.length}`);
   return results;
 }
 
-/** 返回模型结果（批量模式为数组），由步骤的 save_as 写入变量；need_collect 时追加到 collected[event] */
+/** 返回模型结果（批量模式为数组），由步骤的 save_as 写入变量 */
 export async function handleRunAgent(
   collector: Collector,
   workflowItem: WorkflowItem,
@@ -180,9 +175,6 @@ export async function handleRunAgent(
   if (workflowItem.list !== undefined) return runBatch(collector, workflowItem, params, emit, ctx);
 
   const result = await runOnce(params, buildRequest(params, collector.variables), ctx);
-  if (workflowItem.need_collect) {
-    pushCollected(collector, resolveEvent(collector, workflowItem, "run_agent"), result);
-  }
   emit(`run_agent 完成: ${stringify(result).slice(0, 200)}`);
   return result;
 }

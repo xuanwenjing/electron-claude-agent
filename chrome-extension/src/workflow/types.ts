@@ -69,13 +69,14 @@ export interface RunAgentStepParam {
 
 export interface WorkflowItem {
   type: WorkflowStepType | string;
+  /** 步骤名，只用于日志 */
   name?: string;
   url?: string;
   selector?: string;
-  event?: string;
-  need_collect?: boolean;
-  reg_exp?: string;
-  /** 变量名 → URL 规则：本步网络请求命中时写入 { url, method, headers, queryParams, payload, response, cookies } */
+  /**
+   * 变量名 → URL 规则：本步网络请求命中时写入 { url, method, headers, queryParams, payload, response, cookies }。
+   * 配了 capture 的步骤执行完动作后会等到所有变量都在本步命中，超时（见 wait）则本步失败。
+   */
   capture?: Record<string, string>;
   /** 本步返回值写入的变量名（call_api / call_backend 返回体、run_agent 模型输出）；call_api_params 为数组时是按顺序的数组 */
   save_as?: string;
@@ -91,6 +92,7 @@ export interface WorkflowItem {
   /** 步骤开始前求值，为真则跳过本步（loop 则跳过整个循环），如 "${replies[_index] == null}" */
   skip_if?: string;
   pass_condition?: string;
+  /** 毫秒：有 capture 时为等待命中的超时（navigate 默认 15000，其余 10000）；没有 capture 时为动作后的固定等待（默认 3000） */
   wait?: number | string;
   wait_before_finish?: number | string;
   close_tab_before_finish?: string;
@@ -120,16 +122,6 @@ export interface WorkflowConfig {
   needLogin?: boolean;
 }
 
-export interface CollectedText {
-  type: "text";
-  value: unknown;
-}
-
-export interface CollectedArray {
-  type: "array";
-  content: unknown[];
-}
-
 export const HotelPlatform = {
   CtripEbk: "ctripEbk",
   CtripHotel: "ctripHotel",
@@ -140,22 +132,7 @@ export const HotelPlatform = {
 
 export type HotelPlatform = (typeof HotelPlatform)[keyof typeof HotelPlatform];
 
-/** navigate 到携程 EBK / 携程酒店后自动写入 collected.hotelInfo */
-export interface CollectedHotelInfo {
-  type: "hotel_info";
-  platform: HotelPlatform;
-  value: Record<string, unknown>;
-}
-
-export interface CollectedObject {
-  type: "object";
-  value: Record<string, unknown>;
-}
-
-export type CollectedEntry = CollectedText | CollectedArray | CollectedHotelInfo | CollectedObject;
-
 export interface Collector {
-  data: Record<string, CollectedEntry>;
   variables: Record<string, unknown>;
   /** 当前所在各层 loop 的下标，外层在前；loop 外为空数组 */
   loopPath: number[];
@@ -165,7 +142,7 @@ export type EmitFn = (message: string) => void;
 
 export interface WorkflowResult {
   ok: boolean;
-  data: { collected: Collector["data"]; variables: Collector["variables"] } | null;
+  data: { variables: Collector["variables"] } | null;
   error?: string | null;
   /** ok=false 时有值 */
   errorCode?: TaskErrorCode | null;

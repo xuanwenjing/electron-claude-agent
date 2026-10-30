@@ -52,6 +52,11 @@ export function isLoginUrl(url: string | undefined, platform: HotelPlatform): bo
   return LOGIN_URLS[platform].some((loginUrl) => bare.startsWith(loginUrl));
 }
 
+/** url 是哪个平台的登录页；都不是返回 null */
+export function loginPlatformOf(url: string | undefined): HotelPlatform | null {
+  return (Object.keys(LOGIN_URLS) as HotelPlatform[]).find((platform) => isLoginUrl(url, platform)) ?? null;
+}
+
 export async function isOnLoginPage(tabId: number, platform: HotelPlatform): Promise<boolean> {
   const tab = await chrome.tabs.get(tabId);
   return isLoginUrl(tab.url, platform);

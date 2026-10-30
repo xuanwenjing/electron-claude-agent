@@ -43,10 +43,13 @@ chrome-extension/
 - **首标签不参与采集、不关闭**
 - 实现：`src/workflow/browser/crawlWindow.ts`
 
-## 网络采集（need_collect）
+## 网络捕获（capture）
 
-`matchApiList = (need_collect && reg_exp) + Object.values(capture)`  
-MAIN 拦截 → content → `onXhrResponse`：`captureNetworkHit` 写变量，`collectNetworkHit` 写 `collected`（`{ url, payload, response, method, headers, cookies }`）
+`capture: { 变量名: URL 规则 }`：本步页面请求命中规则时写入变量 `{ url, method, headers, queryParams, payload, response, cookies }`（多次命中保留最后一次）。MAIN 拦截 → content → `onXhrResponse` → `captureNetworkHit`。
+
+配了 `capture` 的 navigate / click / call_api，动作后等到**所有** capture 变量都在本步命中才结束；超时（`wait`，navigate 默认 15s，其余 10s）本步失败，`allow_exception` 时只记日志。没配 `capture` 时动作后固定等待 `wait`（默认 3s）。任务结果只有 `variables`（不再有 `collected`；`event` / `need_collect` / `reg_exp` 已移除，配了会报错）。
+
+URL 规则（`capture` 的值 / `close_tab_before_finish`，`src/workflow/util/urlMatch.ts`）：`路径正则[?k=v&k2=*]`，逗号分隔多条任一命中。路径是不带锚点的正则，只和 URL 的 `?` 之前比较（`?` 和 `,` 已用作分隔符，正则里不能出现，可选字符写成 `(s|)`）；参数条件全部满足才命中，`k=v` 值相等，`k=*` 或只写 `k` 表示带了该参数。规则不合法在步骤开始前报错。例：`queryGeneralCommentInfo?replyType=1`。
 
 ## 变量
 
