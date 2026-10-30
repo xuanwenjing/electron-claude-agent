@@ -112,7 +112,7 @@ async function execute(
       abortController,
       onEvent: (event) => {
         if (event.kind === "assistant" || event.kind === "tool" || event.kind === "error") {
-          log(`[agent] ${clip(event.text)}`);
+          log(clip(event.text));
         }
       },
     });

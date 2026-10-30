@@ -154,7 +154,7 @@ export async function runWorkflow(
           assertLoggedIn(config, url, hotelInfo, autoLoginError);
           await runDefaultWait(workflowItem, 15000, 3000, stepToken);
         } else if (workflowItem.type === "call_api") {
-          await handleApiFetch(tabId, collector, workflowItem, emit, stepToken);
+          stepResult = await handleApiFetch(tabId, collector, workflowItem, emit, stepToken);
           await runDefaultWait(workflowItem, 5000, 3000, stepToken);
         } else if (workflowItem.type === "call_backend") {
           stepResult = await handleCallBackend(collector, workflowItem, emit);

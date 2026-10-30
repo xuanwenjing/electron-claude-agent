@@ -85,6 +85,8 @@ export type RunAgentRequestMessage = {
   requestId: string;
   /** 所属抓取任务，模型过程日志记入该任务 */
   taskId?: string;
+  /** 日志前缀，区分并行的 Agent，如批量模式的 "2/5" */
+  label?: string;
   params: RunAgentParams;
 };
 

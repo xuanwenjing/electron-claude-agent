@@ -8,13 +8,32 @@ export type WorkflowStepType =
   | "loop"
   | "run_agent";
 
+/** call_api 请求通道 */
+export const CallApiMode = {
+  /** 默认：宿主页 window.fetch，带页面 Cookie */
+  Page: "page",
+  /** 飞猪：宿主页 window.mtopRequest（页面自带验签），url 为 mtop api，payload 字段展开为入参 */
+  Mtop: "mtop",
+} as const;
+
+export type CallApiMode = (typeof CallApiMode)[keyof typeof CallApiMode];
+
+/** call_api 发请求前的签名（仅 page 通道） */
+export const CallApiSign = {
+  /** 美团：宿主页 window.H5guard.sign 对最终 url / body 签名，签名头（mtgsig）合并进请求头 */
+  Mtgsig: "mtgsig",
+} as const;
+
+export type CallApiSign = (typeof CallApiSign)[keyof typeof CallApiSign];
+
 export interface CallApiParam {
   url: string;
   method?: string;
   headers?: Record<string, unknown>;
   payload?: unknown;
   query_params?: Record<string, unknown>;
-  mode?: string;
+  mode?: CallApiMode;
+  sign?: CallApiSign;
 }
 
 /**
@@ -58,7 +77,7 @@ export interface WorkflowItem {
   reg_exp?: string;
   /** 变量名 → URL 规则：本步网络请求命中时写入 { url, method, headers, queryParams, payload, response, cookies } */
   capture?: Record<string, string>;
-  /** 本步返回值写入的变量名（call_backend 返回体、run_agent 模型输出） */
+  /** 本步返回值写入的变量名（call_api / call_backend 返回体、run_agent 模型输出）；call_api_params 为数组时是按顺序的数组 */
   save_as?: string;
   /** 本步结束后：变量名 → 值（支持 ${expr} / 嵌套对象 / __ref），按书写顺序赋值 */
   set?: Record<string, unknown>;

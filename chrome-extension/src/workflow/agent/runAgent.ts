@@ -7,7 +7,7 @@ import { assertVarName, setVariable } from "../variables";
 
 /** 由 background/bridge 注入：把请求发给客户端并等待模型结果 */
 export type AgentRunner = (
-  req: { taskId?: string; params: RunAgentParams },
+  req: { taskId?: string; label?: string; params: RunAgentParams },
   token?: CancelToken | null,
 ) => Promise<string>;
 
@@ -59,8 +59,13 @@ function buildRequest(params: RunAgentStepParam, vars: Record<string, unknown>):
   };
 }
 
-async function runOnce(params: RunAgentStepParam, request: RunAgentParams, ctx: RunCtx): Promise<unknown> {
-  const text = await runner!({ taskId: ctx.taskId, params: request }, ctx.token);
+async function runOnce(
+  params: RunAgentStepParam,
+  request: RunAgentParams,
+  ctx: RunCtx,
+  label?: string,
+): Promise<unknown> {
+  const text = await runner!({ taskId: ctx.taskId, label, params: request }, ctx.token);
   return params.output_format === "json" ? parseJsonOutput(text) : text;
 }
 
@@ -108,10 +113,11 @@ async function runBatch(
   const worker = async () => {
     while (!batchToken.cancelled && next < items.length) {
       const i = next++;
+      const label = `${i + 1}/${items.length}`;
       try {
         const request = buildRequest(params, { ...vars, [indexVar]: i, [itemVar]: items[i] });
-        results[i] = await runOnce(params, request, { taskId: ctx.taskId, token: batchToken });
-        emit(`run_agent [${i + 1}/${items.length}] 完成: ${stringify(results[i]).slice(0, 120)}`);
+        results[i] = await runOnce(params, request, { taskId: ctx.taskId, token: batchToken }, label);
+        emit(`[agent ${label}] 完成: ${stringify(results[i]).slice(0, 120)}`);
       } catch (err) {
         if (ctx.token?.cancelled) throw err;
         if (!tolerant) {
@@ -120,7 +126,7 @@ async function runBatch(
           return;
         }
         errors.push({ index: i, error: errorText(err) });
-        emit(`run_agent [${i + 1}/${items.length}] 失败（allow_exception，记为 null）: ${errorText(err)}`);
+        emit(`[agent ${label}] 失败（allow_exception，记为 null）: ${errorText(err)}`);
       }
     }
   };

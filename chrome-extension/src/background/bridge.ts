@@ -42,7 +42,7 @@ bindTaskQueueSend(send);
 /** run_agent：requestId → 等待客户端回复 */
 const pendingAgents = new Map<string, { resolve: (text: string) => void; reject: (err: Error) => void }>();
 
-bindAgentRunner(({ taskId, params }, token) => {
+bindAgentRunner(({ taskId, label, params }, token) => {
   return new Promise<string>((resolve, reject) => {
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       reject(new Error("客户端未连接，无法运行 run_agent"));
@@ -69,7 +69,7 @@ bindAgentRunner(({ taskId, params }, token) => {
         reject(err);
       },
     });
-    send({ type: ToClient.RunAgent, requestId, taskId, params });
+    send({ type: ToClient.RunAgent, requestId, taskId, label, params });
   });
 });
 

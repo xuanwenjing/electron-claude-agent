@@ -63,7 +63,10 @@ function emitTaskProgress(taskId: string | undefined, message: string): void {
 async function handleRunAgent(socket: WebSocket, msg: RunAgentRequestMessage): Promise<void> {
   let reply: RunAgentResultMessage;
   try {
-    const result = await runWorkflowAgent(msg.requestId, msg.taskId, msg.params, (m) => emitTaskProgress(msg.taskId, m));
+    const prefix = msg.label ? `[agent ${msg.label}]` : "[agent]";
+    const result = await runWorkflowAgent(msg.requestId, msg.taskId, msg.params, (m) =>
+      emitTaskProgress(msg.taskId, `${prefix} ${m}`),
+    );
     reply = { type: ToExtension.RunAgentResult, requestId: msg.requestId, ok: true, result };
   } catch (err) {
     reply = {

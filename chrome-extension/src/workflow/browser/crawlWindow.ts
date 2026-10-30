@@ -9,6 +9,14 @@ import { urlMatch } from "../util";
 
 const STORAGE_KEY = "currentCrawlWindow";
 const BLANK_TAB_URL = /^(about:blank|(edge|chrome):\/\/(newtab|new-tab-page)\/?)$/;
+/** 浏览器启动时自己弹出的页面（升级说明、欢迎页、新功能介绍），收编启动窗口时可以关掉 */
+const BROWSER_STARTUP_URLS = [
+  /^(edge|chrome):\/\/(welcome|whats-new)/,
+  /^https?:\/\/explore\.microsoft\.com\/[^/]+\/edge\//,
+  /^https?:\/\/(www\.)?microsoft\.com\/[^/]+\/edge\//,
+  /^https?:\/\/microsoftedgewelcome\.microsoft\.com\//,
+  /^https?:\/\/(www\.)?google\.com\/chrome\/(whats-new|welcome)/,
+];
 /** 浏览器刚被拉起时启动窗口可能明显晚于扩展连接出现 */
 export const ADOPT_WAIT_MS = 10_000;
 
@@ -16,11 +24,32 @@ let adopting: Promise<void> | null = null;
 /** 最近一次收编结果，供任务日志说明采集窗口来源 */
 let adoptNote: string | null = null;
 
+function tabUrl(tab: chrome.tabs.Tab): string {
+  return tab.url || tab.pendingUrl || "about:blank";
+}
+
+function isStartupTab(tab: chrome.tabs.Tab): boolean {
+  const url = tabUrl(tab);
+  return BLANK_TAB_URL.test(url) || BROWSER_STARTUP_URLS.some((re) => re.test(url));
+}
+
+/** 启动窗口：所有标签都是空白页或浏览器自己弹的启动页（用户打开的网页不算） */
 function isBlankStartupWindow(win: chrome.windows.Window): boolean {
   const tabs = win.tabs ?? [];
-  if (win.type !== "normal" || tabs.length !== 1) return false;
-  const url = tabs[0].url || tabs[0].pendingUrl || "about:blank";
-  return BLANK_TAB_URL.test(url);
+  return win.type === "normal" && tabs.length > 0 && tabs.every(isStartupTab);
+}
+
+/** 收编后只留首标签作保活：首标签改成空白页，其余启动页关掉 */
+async function tidyStartupWindow(win: chrome.windows.Window): Promise<string> {
+  const tabs = [...(win.tabs ?? [])].sort((a, b) => a.index - b.index);
+  const [keep, ...rest] = tabs;
+  if (keep?.id != null && !BLANK_TAB_URL.test(tabUrl(keep))) {
+    await chrome.tabs.update(keep.id, { url: "about:blank" });
+  }
+  const closeIds = rest.map((t) => t.id).filter((id): id is number => id != null);
+  if (closeIds.length) await chrome.tabs.remove(closeIds);
+  const closed = tabs.filter((t) => !BLANK_TAB_URL.test(tabUrl(t)));
+  return closed.length ? `，已清理启动页 ${closed.map(tabUrl).join(", ")}` : "";
 }
 
 function describeWindows(windows: chrome.windows.Window[]): string {
@@ -30,20 +59,23 @@ function describeWindows(windows: chrome.windows.Window[]): string {
     .join("; ");
 }
 
-async function findBlankStartupWindow(): Promise<{ id: number | null; windows: chrome.windows.Window[] }> {
+async function findBlankStartupWindow(): Promise<{
+  win: chrome.windows.Window | null;
+  windows: chrome.windows.Window[];
+}> {
   const deadline = Date.now() + ADOPT_WAIT_MS;
   for (;;) {
     const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
     const win = windows.find(isBlankStartupWindow);
-    if (win?.id != null) return { id: win.id, windows };
-    if (Date.now() >= deadline) return { id: null, windows };
+    if (win?.id != null) return { win, windows };
+    if (Date.now() >= deadline) return { win: null, windows };
     await new Promise((r) => setTimeout(r, 300));
   }
 }
 
 /**
- * 客户端拉起浏览器后调用：没有可用采集窗口时，把只含一个空白标签的启动窗口收编为采集窗口，
- * 避免启动窗口 + 采集窗口两个窗口。其首标签即保活标签。
+ * 客户端拉起浏览器后调用：没有可用采集窗口时，把启动窗口（只含空白页 / 浏览器升级说明等启动页）收编为采集窗口，
+ * 避免启动窗口 + 采集窗口两个窗口。其首标签即保活标签，其余启动页关掉。
  */
 export function adoptStartupWindowAsCrawlWindow(): Promise<void> {
   adopting ??= (async () => {
@@ -53,12 +85,13 @@ export function adoptStartupWindowAsCrawlWindow(): Promise<void> {
         adoptNote = `已有采集窗口 #${existing}，不收编启动窗口`;
         return;
       }
-      const { id, windows } = await findBlankStartupWindow();
-      if (id != null) {
-        await chrome.storage.local.set({ [STORAGE_KEY]: id });
-        adoptNote = `收编浏览器启动窗口 #${id} 作为采集窗口`;
+      const { win, windows } = await findBlankStartupWindow();
+      if (win?.id != null) {
+        const tidied = await tidyStartupWindow(win);
+        await chrome.storage.local.set({ [STORAGE_KEY]: win.id });
+        adoptNote = `收编浏览器启动窗口 #${win.id} 作为采集窗口${tidied}`;
       } else {
-        adoptNote = `${ADOPT_WAIT_MS / 1000}s 内未找到只含空白标签的启动窗口（${describeWindows(windows)}），将新建采集窗口`;
+        adoptNote = `${ADOPT_WAIT_MS / 1000}s 内未找到启动窗口（只含空白页 / 浏览器启动页，${describeWindows(windows)}），将新建采集窗口`;
       }
     } catch (err) {
       adoptNote = `收编启动窗口出错：${err instanceof Error ? err.message : String(err)}`;

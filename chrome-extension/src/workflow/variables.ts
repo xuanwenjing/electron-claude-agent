@@ -3,7 +3,7 @@
  *
  * 用户配置的变量来源只有四种，每步执行顺序固定：
  *   1. capture  —— 本步网络请求命中时写入（navigate / click / call_api）
- *   2. save_as  —— 本步返回值（call_backend 返回体、run_agent 模型输出）
+ *   2. save_as  —— 本步返回值（call_api / call_backend 返回体、run_agent 模型输出）
  *   3. set      —— 本步结束后求值赋值
  *   4. append   —— 本步结束后追加到数组（跨轮累积）
  * 另有 loop 的 item_var / index_var（只在循环内有效）和引擎内置变量（以 _ 开头，如 _hotelInfo）。

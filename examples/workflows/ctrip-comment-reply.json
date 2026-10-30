@@ -1,0 +1,61 @@
+{
+  "maxRetry": 2,
+  "platform": "ctripEbk",
+  "needLogin": true,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://ebooking.ctrip.com/comment/commentList",
+      "event": "list_template",
+      "need_collect": true,
+      "reg_exp": "getCommentList",
+      "capture": { "listHit": "getCommentList" }
+    },
+    {
+      "type": "loop",
+      "max_count": 50,
+      "index_var": "page",
+      "break_condition": "${(pageHit.response.commentlist || []).length == 0 || pageHit.response.currentPageIndex >= pageHit.response.pageCount}",
+      "children": [
+        {
+          "type": "call_api",
+          "event": "comment_page",
+          "need_collect": true,
+          "reg_exp": "getCommentList",
+          "capture": { "pageHit": "getCommentList" },
+          "call_api_params": {
+            "url": "https://ebooking.ctrip.com/restapi/soa2/26353/getCommentList?_fxpcqlniredt=${listHit.queryParams._fxpcqlniredt}",
+            "method": "POST",
+            "headers": { "__ref": "${listHit.headers}" },
+            "payload": {
+              "__ref": "${listHit.payload}",
+              "catalogTab": "NotFeedBack",
+              "pageIndex": "${page + 1}"
+            }
+          },
+          "pass_condition": "${pageHit.response.currentPageIndex == page + 1}",
+          "set": {
+            "comments": "${(comments || []).concat(pageHit.response.commentlist || [])}"
+          }
+        }
+      ]
+    },
+    {
+      "type": "run_agent",
+      "event": "reply_draft",
+      "list": "${comments || []}",
+      "item_var": "comment",
+      "concurrency": 3,
+      "allow_exception": true,
+      "save_as": "replies",
+      "run_agent_params": {
+        "skills": [
+          { "url": "https://test-img.bwagent.net/agent/skills/eb3fab17e940e819feade6a41749d7d5/skill_ed54a6d383140987b034fe4897f9a2ca/online/1/hotel-comment-reply.zip", "version": "1.0.0" }
+        ],
+        "prompt": "使用 hotel-comment-reply 技能，为下面这条携程点评写商家回复，按技能要求只输出 JSON。\n酒店名：${_hotelInfo.hotelInfo.hotelName}\n评分：${comment.avgScore}\n点评内容：${comment.content}",
+        "output_format": "json",
+        "timeout": 180000
+      }
+    }
+  ]
+}
