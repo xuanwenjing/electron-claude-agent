@@ -118,6 +118,12 @@ contextBridge.exposeInMainWorld("requestApi", {
 contextBridge.exposeInMainWorld("updateApi", {
   meta: (): Promise<{ version: string; packaged: boolean }> =>
     ipcRenderer.invoke("update:getMeta"),
+  getOpenAtLogin: (): Promise<{ supported: boolean; openAtLogin: boolean }> =>
+    ipcRenderer.invoke("app:getOpenAtLogin"),
+  setOpenAtLogin: (
+    enabled: boolean,
+  ): Promise<{ supported: boolean; openAtLogin: boolean }> =>
+    ipcRenderer.invoke("app:setOpenAtLogin", enabled),
   check: (): Promise<{ ok: true; message: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke("update:check"),
   download: (): Promise<{ ok: true; message: string } | { ok: false; error: string }> =>

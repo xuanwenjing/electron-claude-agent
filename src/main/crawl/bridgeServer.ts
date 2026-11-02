@@ -191,6 +191,11 @@ export function stopBridgeServer(): void {
   wss = null;
 }
 
+/** 有抓取任务还在跑（已下发、还没收到结果） */
+export function hasInflightCrawlTasks(): boolean {
+  return inflightTasks.size > 0;
+}
+
 export function isExtensionConnected(): boolean {
   return !!extensionSocket && extensionSocket.readyState === extensionSocket.OPEN;
 }

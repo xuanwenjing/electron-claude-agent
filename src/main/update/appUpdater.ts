@@ -1,5 +1,10 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { app, dialog, type BrowserWindow } from "electron";
 import { autoUpdater, type UpdateInfo } from "electron-updater";
+
+import { hasInflightCrawlTasks } from "../crawl/bridgeServer";
 
 export type UpdateStatusEvent = {
   kind:
@@ -19,6 +24,85 @@ type GetWindow = () => BrowserWindow | null;
 
 let configured = false;
 
+/** 凌晨安装窗口（本地时间），窗口内且没有抓取任务才重启 */
+const NIGHT_START_HOUR = 2;
+const NIGHT_END_HOUR = 5;
+/** 临时：下载完成后马上安装，方便看重启后窗口是否抢前台。测完改回 false */
+const INSTALL_NOW_FOR_TEST = true;
+const UPDATE_CHECK_INTERVAL_MS = INSTALL_NOW_FOR_TEST ? 15_000 : 4 * 60 * 60 * 1000;
+const UPDATE_CHECK_DELAY_MS = INSTALL_NOW_FOR_TEST ? 5_000 : 15_000;
+const INSTALL_NOW_DELAY_MS = 5_000;
+const BUSY_RETRY_MS = 60_000;
+/** 凌晨安装后的下一次启动：窗口最小化到任务栏 */
+const LAUNCH_WITHOUT_FOCUS_FLAG = "launch-without-focus";
+
+function launchWithoutFocusFlagPath(): string {
+  return path.join(app.getPath("userData"), LAUNCH_WITHOUT_FOCUS_FLAG);
+}
+
+function markLaunchWithoutFocus(): void {
+  fs.writeFileSync(launchWithoutFocusFlagPath(), "");
+}
+
+/** 本次启动是否由凌晨更新拉起；读到后即删掉，只生效一次 */
+export function consumeLaunchWithoutFocus(): boolean {
+  try {
+    fs.unlinkSync(launchWithoutFocusFlagPath());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let nightInstallTimer: ReturnType<typeof setTimeout> | null = null;
+let nightInstallStarted = false;
+
+function isInNightWindow(now = new Date()): boolean {
+  if (INSTALL_NOW_FOR_TEST) return true;
+  const hour = now.getHours();
+  return hour >= NIGHT_START_HOUR && hour < NIGHT_END_HOUR;
+}
+
+function msUntilNightWindow(now = new Date()): number {
+  if (INSTALL_NOW_FOR_TEST) return INSTALL_NOW_DELAY_MS;
+  if (isInNightWindow(now)) return 0;
+  const start = new Date(now);
+  start.setHours(NIGHT_START_HOUR, 0, 0, 0);
+  if (now.getTime() >= start.getTime()) start.setDate(start.getDate() + 1);
+  return start.getTime() - now.getTime();
+}
+
+function scheduleWindowsNightInstall(getWindow: GetWindow): void {
+  if (nightInstallStarted) return;
+  if (nightInstallTimer) clearTimeout(nightInstallTimer);
+  const wait = msUntilNightWindow();
+  nightInstallTimer = setTimeout(() => {
+    nightInstallTimer = null;
+    tryWindowsNightInstall(getWindow);
+  }, wait);
+}
+
+function tryWindowsNightInstall(getWindow: GetWindow): void {
+  if (nightInstallStarted) return;
+  if (!isInNightWindow()) {
+    scheduleWindowsNightInstall(getWindow);
+    return;
+  }
+  if (hasInflightCrawlTasks()) {
+    send(getWindow, {
+      kind: "downloaded",
+      message: "更新已下载，当前有抓取任务，凌晨空闲后再重启安装",
+    });
+    nightInstallTimer = setTimeout(() => tryWindowsNightInstall(getWindow), BUSY_RETRY_MS);
+    return;
+  }
+  nightInstallStarted = true;
+  send(getWindow, { kind: "downloaded", message: "正在重启并安装更新…" });
+  markLaunchWithoutFocus();
+  // 静默安装并重新打开；新窗口最小化到任务栏
+  autoUpdater.quitAndInstall(true, true);
+}
+
 function send(getWindow: GetWindow, event: UpdateStatusEvent): void {
   getWindow()?.webContents.send("update:event:status", event);
 }
@@ -28,7 +112,9 @@ export function setupAutoUpdater(getWindow: GetWindow): void {
   configured = true;
 
   // 公开 GitHub Release，客户端无需 Token
-  autoUpdater.autoDownload = false;
+  // Windows 安装包自动下载，凌晨空闲时重启安装；提前退出也会装上
+  const autoUpdate = process.platform === "win32" && app.isPackaged;
+  autoUpdater.autoDownload = autoUpdate;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on("checking-for-update", () => {
@@ -60,6 +146,18 @@ export function setupAutoUpdater(getWindow: GetWindow): void {
   });
 
   autoUpdater.on("update-downloaded", async (info: UpdateInfo) => {
+    if (process.platform === "win32") {
+      send(getWindow, {
+        kind: "downloaded",
+        message: INSTALL_NOW_FOR_TEST
+          ? `更新 ${info.version} 已下载，约 ${INSTALL_NOW_DELAY_MS / 1000} 秒后重启安装（测试）`
+          : `更新 ${info.version} 已下载，将在凌晨 ${NIGHT_START_HOUR}:00–${NIGHT_END_HOUR}:00 没有抓取任务时重启安装`,
+        version: info.version,
+      });
+      scheduleWindowsNightInstall(getWindow);
+      return;
+    }
+
     send(getWindow, {
       kind: "downloaded",
       message: `更新 ${info.version} 已下载，可重启安装`,
@@ -91,6 +189,19 @@ export function setupAutoUpdater(getWindow: GetWindow): void {
       message: err instanceof Error ? err.message : String(err),
     });
   });
+
+  if (autoUpdate) {
+    const check = () => {
+      void autoUpdater.checkForUpdates().catch((err) => {
+        send(getWindow, {
+          kind: "error",
+          message: err instanceof Error ? err.message : String(err),
+        });
+      });
+    };
+    setTimeout(check, UPDATE_CHECK_DELAY_MS);
+    setInterval(check, UPDATE_CHECK_INTERVAL_MS);
+  }
 }
 
 export async function checkForAppUpdates(): Promise<

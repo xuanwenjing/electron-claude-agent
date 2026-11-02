@@ -1,7 +1,7 @@
 import { AbortError, query } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 
-import { getPythonExecutable } from "../paths";
+import { getPythonExecutable } from "../utils/paths";
 import { createPythonSession, withBundledPython } from "./pythonMcp";
 import { resolveClaudeCli } from "./resolveClaudeCli";
 

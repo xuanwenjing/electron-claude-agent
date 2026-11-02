@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 
-import { getPythonBinDir, getPythonExecutable } from "../paths";
+import { getPythonBinDir, getPythonExecutable } from "../utils/paths";
 
 const OUTPUT_MAX_CHARS = 30_000;
 const DEFAULT_TIMEOUT_SEC = 120;

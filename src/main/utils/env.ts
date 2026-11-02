@@ -5,7 +5,7 @@ import path from "node:path";
 
 export function loadEnvFiles(): void {
   const candidates = [
-    path.join(__dirname, "../../.env"),
+    path.join(__dirname, "../../../.env"),
     path.join(process.cwd(), ".env"),
   ];
   // 打包后也可把 .env 放进 userData

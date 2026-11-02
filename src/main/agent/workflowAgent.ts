@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { RunAgentParams } from "../../shared/bridgeProtocol";
-import { ensureWorkspaceDir } from "../paths";
+import { ensureWorkspaceDir } from "../utils/paths";
 import { runAgent } from "./runAgent";
 import { installSkills } from "./skillPackage";
 

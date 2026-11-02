@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { TaskErrorCode } from "../../shared/bridgeProtocol";
-import { ensureWorkspaceDir } from "../paths";
+import { ensureWorkspaceDir } from "../utils/paths";
 
 export interface CrawlLogEntry {
   at: string;

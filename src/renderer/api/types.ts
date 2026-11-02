@@ -113,6 +113,10 @@ declare global {
     };
     updateApi: {
       meta: () => Promise<{ version: string; packaged: boolean }>;
+      getOpenAtLogin: () => Promise<{ supported: boolean; openAtLogin: boolean }>;
+      setOpenAtLogin: (
+        enabled: boolean,
+      ) => Promise<{ supported: boolean; openAtLogin: boolean }>;
       check: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
       download: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
       onStatus: (handler: (event: UpdateStatusEvent) => void) => () => void;

@@ -12,7 +12,7 @@ export function getPythonHome(): string {
     return path.join(process.resourcesPath, "python");
   }
   const os = process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : process.platform;
-  return path.join(__dirname, "../../resources/python", `${os}-${process.arch}`);
+  return path.join(__dirname, "../../../resources/python", `${os}-${process.arch}`);
 }
 
 /** 解释器所在目录，用于放到 PATH 最前面 */
@@ -34,7 +34,7 @@ export function getPythonExecutable(): string | null {
 export function ensureWorkspaceDir(): string {
   const dir = app.isPackaged
     ? path.join(app.getPath("userData"), "workspace")
-    : path.join(__dirname, "../../workspace");
+    : path.join(__dirname, "../../../workspace");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

@@ -100,6 +100,7 @@ async function swapInNewDir(): Promise<void> {
 /**
  * 启动时调用：固定目录不存在，或安装包内版本更高时，用安装包内版本覆盖。
  * 开发态版本号不变，每次启动都用 chrome-extension/dist 覆盖。
+ * 已安装的版本被更高的内置版本换掉时，通知正在运行的扩展重载。
  */
 export async function ensureExtensionInstalled(): Promise<string> {
   const target = getInstalledExtensionDir();
@@ -113,13 +114,20 @@ export async function ensureExtensionInstalled(): Promise<string> {
   }
 
   const installedVersion = readManifestVersion(target);
-  if (app.isPackaged && installedVersion && compareVersions(bundledVersion, installedVersion) <= 0) {
+  const bundledIsNewer = !!installedVersion && compareVersions(bundledVersion, installedVersion) > 0;
+  if (app.isPackaged && installedVersion && !bundledIsNewer) {
     return target;
   }
 
   await fs.promises.cp(bundled, siblingDir("new"), { recursive: true });
   await swapInNewDir();
   console.log(`[ext-install] 已安装内置扩展 ${installedVersion ?? "(无)"} → ${bundledVersion}:`, target);
+  if (bundledIsNewer) {
+    const reloadSent = requestReload();
+    console.log(
+      `[ext-install] ${reloadSent ? "已发送 reload_extension" : "扩展未连接，连上后再发送 reload_extension"}`,
+    );
+  }
   return target;
 }
 

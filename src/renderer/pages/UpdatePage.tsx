@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,6 +17,15 @@ export function UpdatePage() {
   const checking = useUpdaterStore((s) => s.checking);
   const check = useUpdaterStore((s) => s.check);
   const download = useUpdaterStore((s) => s.download);
+  const [openAtLogin, setOpenAtLoginState] = useState(false);
+  const [openAtLoginSupported, setOpenAtLoginSupported] = useState(false);
+
+  useEffect(() => {
+    void window.updateApi.getOpenAtLogin().then((state) => {
+      setOpenAtLoginSupported(state.supported);
+      setOpenAtLoginState(state.openAtLogin);
+    });
+  }, []);
 
   return (
     <Card>
@@ -29,6 +39,24 @@ export function UpdatePage() {
           {packaged ? "打包版（可检查更新）" : "开发版（请用安装包测试更新）"}
         </p>
         <p className="text-sm">{status}</p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={openAtLogin}
+            disabled={!openAtLoginSupported}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              setOpenAtLoginState(enabled);
+              void window.updateApi.setOpenAtLogin(enabled).then((state) => {
+                setOpenAtLoginSupported(state.supported);
+                setOpenAtLoginState(state.openAtLogin);
+              });
+            }}
+          />
+          登录 Windows 后自动启动
+          {openAtLoginSupported ? "" : "（仅 Windows 安装包）"}
+        </label>
         <div className="flex gap-2">
           <Button onClick={() => void check()} disabled={!packaged || checking}>
             {checking ? "检查中…" : "检查更新"}
