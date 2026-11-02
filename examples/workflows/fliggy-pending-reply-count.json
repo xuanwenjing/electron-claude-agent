@@ -1,0 +1,39 @@
+{
+  "maxRetry": 1,
+  "platform": "fliggy",
+  "needLogin": true,
+  "workflow": [
+    {
+      "type": "navigate",
+      "url": "https://hotel.fliggy.com/ebooking/hotelBaseInfoUv.htm#/ebk/commentsManager",
+      "name": "review_template",
+      "capture": { "reviewHit": "/ebooking/review/guestReviewV3.do" }
+    },
+    {
+      "type": "call_api",
+      "name": "pending_counts",
+      "save_as": "pendingRes",
+      "call_api_params": [
+        {
+          "url": "https://hotel.fliggy.com/ebooking/review/guestReviewV3.do",
+          "method": "POST",
+          "headers": { "__ref": "${reviewHit.headers}" },
+          "query_params": { "__ref": "${reviewHit.queryParams}" },
+          "payload": "${reviewHit.payload.raw.replace('hasShopReplay=0', 'hasShopReplay=1') + '&source=0'}"
+        },
+        {
+          "url": "https://hotel.fliggy.com/ebooking/review/guestReviewV3.do",
+          "method": "POST",
+          "headers": { "__ref": "${reviewHit.headers}" },
+          "query_params": { "__ref": "${reviewHit.queryParams}" },
+          "payload": "${reviewHit.payload.raw.replace('hasShopReplay=0', 'hasShopReplay=1') + '&source=40'}"
+        }
+      ],
+      "pass_condition": "${pendingRes[0].code == '200' && pendingRes[1].code == '200'}",
+      "set": {
+        "fliggyPending": "${pendingRes[0].data.totalNum}",
+        "gaodePending": "${pendingRes[1].data.totalNum}"
+      }
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import type { WorkflowItem } from "../types";
 import { sleep } from "../util";
 
 const TAB_COMPLETE_TIMEOUT_MS = 60000;
-const PAGE_TEXT_PREVIEW_LENGTH = 150;
+const PAGE_TEXT_PREVIEW_LENGTH = 1000;
 /** 页面被新的导航顶替时报的错，不算加载失败 */
 const NAV_ABORTED_ERROR = "net::ERR_ABORTED";
 

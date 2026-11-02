@@ -3,7 +3,7 @@
   "name": "Crawl Bridge Extension",
   "version": "0.1.0",
   "description": "执行 Electron 下发的通用抓取 workflow",
-  "permissions": ["tabs", "windows", "scripting", "storage", "alarms", "debugger", "webNavigation"],
+  "permissions": ["tabs", "windows", "scripting", "storage", "alarms", "debugger", "webNavigation", "cookies"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background/index.js",

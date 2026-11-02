@@ -1,4 +1,5 @@
 import { getBridgeStatus, initBridge, reconnectBridge } from "./bridge";
+import { initPersistFliggyCookies } from "./persistFliggyCookies";
 import { captureHotelInfoFromXhr, isCrawlWindow, onXhrResponse, type XhrCapturePayload } from "../workflow";
 import { CRAWL_OVERLAY_QUERY } from "../shared/constants";
 
@@ -9,6 +10,7 @@ chrome.runtime.onStartup.addListener(() => {
   void initBridge();
 });
 void initBridge();
+initPersistFliggyCookies();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "GET_BRIDGE_STATUS") {

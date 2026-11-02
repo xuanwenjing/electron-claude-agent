@@ -41,7 +41,7 @@ function loopNote(collector: Collector): string {
 function preview(value: unknown): string {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   if (text == null) return String(value);
-  return text.length > 120 ? `${text.slice(0, 120)}…` : text;
+  return text.length > 1000 ? `${text.slice(0, 1000)}…` : text;
 }
 
 export function setVariable(
