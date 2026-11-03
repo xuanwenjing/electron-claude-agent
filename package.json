@@ -1,6 +1,6 @@
 {
   "name": "electron-claude-agent",
-  "version": "0.1.9",
+  "version": "0.2.7",
   "private": true,
   "description": "Electron + Claude Agent SDK：窗口点按钮跑通 query（Skill / Bash），支持 macOS & Windows 打包",
   "main": "dist/main/index.js",
@@ -14,7 +14,7 @@
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "python:fetch": "node scripts/fetch-python.js",
     "dev": "npm run python:fetch && npm run build:ts && npm run renderer:build && npm run ext:build && concurrently -k \"tsc -p tsconfig.json --watch --preserveWatchOutput\" \"vite build --watch --config src/renderer/vite.config.mts\" \"wait-on dist/main/index.js dist/renderer/index.html && npm run start:electron\"",
-    "build:ts": "tsc -p tsconfig.json",
+    "build:ts": "node scripts/clean-main-build.cjs && tsc -p tsconfig.json && node --test scripts/build-output.test.cjs",
     "renderer:build": "vite build --config src/renderer/vite.config.mts",
     "renderer:typecheck": "tsc -p src/renderer/tsconfig.json --noEmit",
     "ext:build": "node chrome-extension/build.mjs",
