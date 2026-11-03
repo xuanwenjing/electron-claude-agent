@@ -3,6 +3,7 @@ import { create } from "zustand";
 type UpdaterState = {
   version: string;
   packaged: boolean;
+  busy: boolean;
   status: string;
   canDownload: boolean;
   checking: boolean;
@@ -18,6 +19,7 @@ let unsub: (() => void) | null = null;
 export const useUpdaterStore = create<UpdaterState>((set, get) => ({
   version: "",
   packaged: false,
+  busy: false,
   status: "尚未检查",
   canDownload: false,
   checking: false,
@@ -27,7 +29,7 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
     if (get().inited) return;
     unsub?.();
     unsub = window.updateApi.onStatus((event) => {
-      set({ status: event.message });
+      set({ status: event.message, busy: event.busy ?? false });
       if (event.kind === "available") set({ canDownload: true });
     });
     void get().refreshMeta();
@@ -36,7 +38,7 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
 
   refreshMeta: async () => {
     const meta = await window.updateApi.meta();
-    set({ version: meta.version, packaged: meta.packaged });
+    set({ version: meta.version, packaged: meta.packaged, busy: meta.busy });
   },
 
   check: async () => {

@@ -16,6 +16,7 @@ export type UpdateStatusEvent = {
   message: string;
   version?: string;
   percent?: number;
+  busy?: boolean;
 };
 
 export type CrawlResultRow = {
@@ -112,7 +113,7 @@ declare global {
       onResult: (handler: (data: CrawlResultEvent) => void) => () => void;
     };
     updateApi: {
-      meta: () => Promise<{ version: string; packaged: boolean }>;
+      meta: () => Promise<{ version: string; packaged: boolean; busy: boolean }>;
       getOpenAtLogin: () => Promise<{ supported: boolean; openAtLogin: boolean }>;
       setOpenAtLogin: (
         enabled: boolean,

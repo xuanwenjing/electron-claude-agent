@@ -36,6 +36,7 @@ export type UpdateStatusEvent = {
   message: string;
   version?: string;
   percent?: number;
+  busy?: boolean;
 };
 
 contextBridge.exposeInMainWorld("crawlApi", {
@@ -116,7 +117,7 @@ contextBridge.exposeInMainWorld("requestApi", {
 });
 
 contextBridge.exposeInMainWorld("updateApi", {
-  meta: (): Promise<{ version: string; packaged: boolean }> =>
+  meta: (): Promise<{ version: string; packaged: boolean; busy: boolean }> =>
     ipcRenderer.invoke("update:getMeta"),
   getOpenAtLogin: (): Promise<{ supported: boolean; openAtLogin: boolean }> =>
     ipcRenderer.invoke("app:getOpenAtLogin"),

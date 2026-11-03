@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { app, dialog, type BrowserWindow } from "electron";
-import { autoUpdater, type UpdateInfo } from "electron-updater";
+import type { UpdateInfo } from "electron-updater";
+import { autoUpdater } from "./updater";
 
 import { hasInflightCrawlTasks } from "../crawl/bridgeServer";
 
@@ -18,18 +19,36 @@ export type UpdateStatusEvent = {
   message: string;
   version?: string;
   percent?: number;
+  busy?: boolean;
 };
 
 type GetWindow = () => BrowserWindow | null;
 
 let configured = false;
+let updating = false;
+let updateReady = false;
+let updateWindow: GetWindow = () => null;
+let lastStatus: UpdateStatusEvent = { kind: "not-available", message: "尚未检查" };
+
+// Prevent concurrent downloads or replacing an installer that is already ready.
+async function runUpdate<T>(operation: () => Promise<T>): Promise<T> {
+  if (updating || updateReady) throw new Error("更新正在进行或等待安装，暂时不能执行此操作");
+  updating = true;
+  send(updateWindow, lastStatus);
+  try {
+    return await operation();
+  } finally {
+    updating = false;
+    send(updateWindow, lastStatus);
+  }
+}
 
 /** 凌晨安装窗口（本地时间），窗口内且没有抓取任务才重启 */
 const NIGHT_START_HOUR = 2;
 const NIGHT_END_HOUR = 5;
 /** 临时：下载完成后马上安装，方便看重启后窗口是否抢前台。测完改回 false */
 const INSTALL_NOW_FOR_TEST = true;
-const UPDATE_CHECK_INTERVAL_MS = INSTALL_NOW_FOR_TEST ? 15_000 : 4 * 60 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = INSTALL_NOW_FOR_TEST ? 15_000 : 60 * 60 * 1000;
 const UPDATE_CHECK_DELAY_MS = INSTALL_NOW_FOR_TEST ? 5_000 : 15_000;
 const INSTALL_NOW_DELAY_MS = 5_000;
 const BUSY_RETRY_MS = 60_000;
@@ -91,7 +110,7 @@ function tryWindowsNightInstall(getWindow: GetWindow): void {
   if (hasInflightCrawlTasks()) {
     send(getWindow, {
       kind: "downloaded",
-      message: "更新已下载，当前有抓取任务，凌晨空闲后再重启安装",
+      message: "更新已下载，当前有抓取任务，空闲后再重启安装",
     });
     nightInstallTimer = setTimeout(() => tryWindowsNightInstall(getWindow), BUSY_RETRY_MS);
     return;
@@ -104,12 +123,14 @@ function tryWindowsNightInstall(getWindow: GetWindow): void {
 }
 
 function send(getWindow: GetWindow, event: UpdateStatusEvent): void {
-  getWindow()?.webContents.send("update:event:status", event);
+  lastStatus = event;
+  getWindow()?.webContents.send("update:event:status", { ...event, busy: updating || updateReady });
 }
 
 export function setupAutoUpdater(getWindow: GetWindow): void {
   if (configured) return;
   configured = true;
+  updateWindow = getWindow;
 
   // 公开 GitHub Release，客户端无需 Token
   // Windows 安装包自动下载，凌晨空闲时重启安装；提前退出也会装上
@@ -124,7 +145,7 @@ export function setupAutoUpdater(getWindow: GetWindow): void {
   autoUpdater.on("update-available", (info: UpdateInfo) => {
     send(getWindow, {
       kind: "available",
-      message: `发现新版本 ${info.version}`,
+      message: `发现版本 ${info.version}`,
       version: info.version,
     });
   });
@@ -146,6 +167,7 @@ export function setupAutoUpdater(getWindow: GetWindow): void {
   });
 
   autoUpdater.on("update-downloaded", async (info: UpdateInfo) => {
+    updateReady = true;
     if (process.platform === "win32") {
       send(getWindow, {
         kind: "downloaded",
@@ -192,12 +214,8 @@ export function setupAutoUpdater(getWindow: GetWindow): void {
 
   if (autoUpdate) {
     const check = () => {
-      void autoUpdater.checkForUpdates().catch((err) => {
-        send(getWindow, {
-          kind: "error",
-          message: err instanceof Error ? err.message : String(err),
-        });
-      });
+      if (updating || updateReady) return;
+      void checkForAppUpdates();
     };
     setTimeout(check, UPDATE_CHECK_DELAY_MS);
     setInterval(check, UPDATE_CHECK_INTERVAL_MS);
@@ -215,7 +233,11 @@ export async function checkForAppUpdates(): Promise<
   }
 
   try {
-    const result = await autoUpdater.checkForUpdates();
+    const result = await runUpdate(async () => {
+      const result = await autoUpdater.checkForUpdates();
+      if (result?.downloadPromise) await result.downloadPromise;
+      return result;
+    });
     if (!result) {
       return { ok: false, error: "检查更新未返回结果" };
     }
@@ -238,7 +260,7 @@ export async function downloadAppUpdate(): Promise<
     return { ok: false, error: "开发模式不能下载更新" };
   }
   try {
-    await autoUpdater.downloadUpdate();
+    await runUpdate(() => autoUpdater.downloadUpdate());
     return { ok: true, message: "已开始下载更新" };
   } catch (err) {
     return {
@@ -248,9 +270,10 @@ export async function downloadAppUpdate(): Promise<
   }
 }
 
-export function getUpdateMeta(): { version: string; packaged: boolean } {
+export function getUpdateMeta(): { version: string; packaged: boolean; busy: boolean } {
   return {
     version: app.getVersion(),
     packaged: app.isPackaged,
+    busy: updating || updateReady,
   };
 }

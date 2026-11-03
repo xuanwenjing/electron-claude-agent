@@ -14,6 +14,7 @@ export function UpdatePage() {
   const packaged = useUpdaterStore((s) => s.packaged);
   const status = useUpdaterStore((s) => s.status);
   const canDownload = useUpdaterStore((s) => s.canDownload);
+  const busy = useUpdaterStore((s) => s.busy);
   const checking = useUpdaterStore((s) => s.checking);
   const check = useUpdaterStore((s) => s.check);
   const download = useUpdaterStore((s) => s.download);
@@ -58,10 +59,10 @@ export function UpdatePage() {
           {openAtLoginSupported ? "" : "（仅 Windows 安装包）"}
         </label>
         <div className="flex gap-2">
-          <Button onClick={() => void check()} disabled={!packaged || checking}>
+          <Button onClick={() => void check()} disabled={!packaged || checking || busy}>
             {checking ? "检查中…" : "检查更新"}
           </Button>
-          <Button variant="secondary" onClick={() => void download()} disabled={!canDownload}>
+          <Button variant="secondary" onClick={() => void download()} disabled={!canDownload || busy}>
             下载更新
           </Button>
         </div>
