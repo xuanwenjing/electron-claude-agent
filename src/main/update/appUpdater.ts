@@ -33,7 +33,7 @@ const UPDATE_CHECK_INTERVAL_MS = INSTALL_NOW_FOR_TEST ? 15_000 : 4 * 60 * 60 * 1
 const UPDATE_CHECK_DELAY_MS = INSTALL_NOW_FOR_TEST ? 5_000 : 15_000;
 const INSTALL_NOW_DELAY_MS = 5_000;
 const BUSY_RETRY_MS = 60_000;
-/** 凌晨安装后的下一次启动：窗口最小化到任务栏 */
+/** 凌晨安装后的下一次启动：Windows 窗口隐藏到托盘 */
 const LAUNCH_WITHOUT_FOCUS_FLAG = "launch-without-focus";
 
 function launchWithoutFocusFlagPath(): string {
@@ -99,7 +99,7 @@ function tryWindowsNightInstall(getWindow: GetWindow): void {
   nightInstallStarted = true;
   send(getWindow, { kind: "downloaded", message: "正在重启并安装更新…" });
   markLaunchWithoutFocus();
-  // 静默安装并重新打开；新窗口最小化到任务栏
+  // 静默安装并重新打开；新窗口隐藏到托盘
   autoUpdater.quitAndInstall(true, true);
 }
 

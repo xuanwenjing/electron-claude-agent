@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app } from "electron";
 
 import { killAllPython } from "./agent/pythonMcp";
 import { stopBridgeServer } from "./crawl/bridgeServer";
@@ -6,31 +6,43 @@ import { closeDatabase, initDatabase } from "./db";
 import { loadEnvFiles, loadUserDataEnv } from "./utils/env";
 import { registerIpcHandlers, startCrawlBridge } from "./ipc";
 import { startUpdaters } from "./update";
-import { applyOpenAtLogin } from "./window/autoLaunch";
-import { createMainWindow } from "./window";
+import { applyOpenAtLogin, launchedAtLogin } from "./window/autoLaunch";
+import { createMainWindow, showMainWindow } from "./window";
 
-loadEnvFiles();
+// Acquire the lock before initializing the database, bridge port or updaters.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  loadEnvFiles();
 
-app.whenReady().then(() => {
-  loadUserDataEnv();
+  const initialized = app.whenReady().then(() => {
+    loadUserDataEnv();
 
-  initDatabase();
-  registerIpcHandlers();
-  startCrawlBridge();
-  startUpdaters();
-  applyOpenAtLogin();
-  createMainWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    initDatabase();
+    registerIpcHandlers();
+    startCrawlBridge();
+    startUpdaters();
+    applyOpenAtLogin();
+    createMainWindow();
   });
-});
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+  // Queue activation until initial setup completes, including a rapid second launch.
+  const activateWindow = () => { void initialized.then(showMainWindow); };
+  app.on("second-instance", (_event, commandLine = []) => {
+    // A duplicate login launch is background work, not a request to open the UI.
+    if (launchedAtLogin(commandLine)) return;
+    activateWindow();
+  });
+  // Dock activation is a macOS interaction; Windows uses second-instance/tray clicks.
+  if (process.platform === "darwin") app.on("activate", activateWindow);
 
-app.on("before-quit", () => {
-  killAllPython();
-  stopBridgeServer();
-  closeDatabase();
-});
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+
+  app.on("before-quit", () => {
+    killAllPython();
+    stopBridgeServer();
+    closeDatabase();
+  });
+}

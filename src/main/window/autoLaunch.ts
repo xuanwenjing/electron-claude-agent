@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { app, ipcMain } from "electron";
 
-/** 登录启动时带上，用来把窗口收到任务栏。Electron 的 wasOpenedAtLogin 在 Windows 上不可用。 */
+/** 登录启动时带上，用来把窗口隐藏到托盘。Electron 的 wasOpenedAtLogin 在 Windows 上不可用。 */
 const OPEN_AT_LOGIN_ARG = "--open-at-login";
 const PREF_FILE = "open-at-login";
 
@@ -43,8 +43,8 @@ export function applyOpenAtLogin(): void {
   apply(readEnabled());
 }
 
-export function launchedAtLogin(): boolean {
-  return process.argv.includes(OPEN_AT_LOGIN_ARG);
+export function launchedAtLogin(argv: readonly string[] = process.argv): boolean {
+  return argv.includes(OPEN_AT_LOGIN_ARG);
 }
 
 export function getOpenAtLoginState(): OpenAtLoginState {

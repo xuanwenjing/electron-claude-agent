@@ -11,16 +11,26 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
+export function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) createMainWindow();
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
 export function sendToRenderer(channel: string, data: unknown): void {
   mainWindow?.webContents.send(channel, data);
 }
 
 export function createMainWindow(): void {
-  const startMinimized = consumeLaunchWithoutFocus() || launchedAtLogin();
+  const startInBackground = consumeLaunchWithoutFocus() || launchedAtLogin();
+  const startInTray = process.platform === "win32" && startInBackground;
   mainWindow = new BrowserWindow({
     width: 980,
     height: 920,
-    show: !startMinimized,
+    show: !startInTray,
     webPreferences: {
       preload: path.join(__dirname, "../../preload/index.js"),
       contextIsolation: true,
@@ -32,25 +42,9 @@ export function createMainWindow(): void {
   // Remove the Windows menu bar while keeping native window controls.
   if (process.platform === "win32") mainWindow.removeMenu();
 
-  void setupWindowsTray(mainWindow);
+  void setupWindowsTray(mainWindow, { startHidden: startInTray });
 
   mainWindow.loadFile(path.join(__dirname, "../../renderer/index.html"));
-  if (startMinimized) {
-    const win = mainWindow;
-    let startupMinimizeCancelled = false;
-    win.on("hide", () => { startupMinimizeCancelled = true; });
-    win.on("restore", () => { startupMinimizeCancelled = true; });
-    const minimize = () => {
-      if (!startupMinimizeCancelled && !win.isDestroyed() && !win.isMinimized()) win.minimize();
-    };
-    // 安装程序拉起进程时会把窗口激活，准备好后再收一次
-    win.once("ready-to-show", () => {
-      if (startupMinimizeCancelled || win.isDestroyed()) return;
-      win.showInactive();
-      minimize();
-      setTimeout(minimize, 800);
-    });
-  }
   mainWindow.on("closed", () => {
     mainWindow = null;
   });

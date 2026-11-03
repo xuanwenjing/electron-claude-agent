@@ -1,7 +1,10 @@
 import { app, autoUpdater, Tray, type BrowserWindow } from "electron";
 
 /** Keep the Windows window alive until the user exits or an update quits the app. */
-export async function setupWindowsTray(win: BrowserWindow): Promise<void> {
+export async function setupWindowsTray(
+  win: BrowserWindow,
+  { startHidden = false }: { startHidden?: boolean } = {},
+): Promise<void> {
   if (process.platform !== "win32") return;
 
   // Event handlers retain the tray for the lifetime of this window.
@@ -47,5 +50,7 @@ export async function setupWindowsTray(win: BrowserWindow): Promise<void> {
     tray?.destroy();
     tray = null;
     console.error("Failed to create Windows tray", error);
+    // An update restart must remain reachable if its tray cannot be created.
+    if (startHidden && !win.isDestroyed() && !isQuitting) win.show();
   }
 }

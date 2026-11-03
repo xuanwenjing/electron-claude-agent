@@ -7,12 +7,12 @@ const { test } = require('node:test');
 const ts = require('typescript');
 
 // Exercise the tray lifecycle on any OS; only the native Electron boundary is faked.
-async function setup({ platform = 'win32', iconFails = false } = {}) {
+async function setup({ platform = 'win32', iconFails = false, startHidden = false } = {}) {
   const app = new EventEmitter();
   const autoUpdater = new EventEmitter();
   const win = new EventEmitter();
   Object.assign(win, {
-    visible: true, minimized: false, destroyed: false, focused: false,
+    visible: !startHidden, minimized: false, destroyed: false, focused: false,
     isDestroyed() { return this.destroyed; },
     isMinimized() { return this.minimized; },
     hide() { this.visible = false; },
@@ -51,7 +51,7 @@ async function setup({ platform = 'win32', iconFails = false } = {}) {
       return { app, autoUpdater, Tray };
     },
   }, { filename });
-  await exports.setupWindowsTray(win);
+  await exports.setupWindowsTray(win, { startHidden });
   return { app, autoUpdater, win, trays };
 }
 
@@ -102,4 +102,19 @@ test('macOS retains normal window closing without a tray', async () => {
   win.close();
   assert.equal(win.destroyed, true);
   assert.equal(trays.length, 0);
+});
+
+test('tray startup stays hidden until the user clicks the icon', async () => {
+  const { win, trays } = await setup({ startHidden: true });
+  assert.equal(win.visible, false);
+  assert.equal(win.minimized, false);
+  trays[0].emit('click');
+  assert.equal(win.visible, true);
+  assert.equal(win.focused, true);
+});
+
+test('failed tray creation shows an initially hidden window', async () => {
+  const { win } = await setup({ startHidden: true, iconFails: true });
+  assert.equal(win.visible, true);
+  assert.equal(win.destroyed, false);
 });
