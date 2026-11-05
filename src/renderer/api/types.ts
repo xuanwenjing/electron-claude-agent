@@ -90,6 +90,9 @@ declare global {
       reloadExtension: () => Promise<
         { ok: true; taskId: string } | { ok: false; error: string }
       >;
+      openUrl: (
+        url: string,
+      ) => Promise<{ ok: true } | { ok: false; error: string }>;
       onStatus: (
         handler: (data: { connected: boolean; port: number }) => void,
       ) => () => void;

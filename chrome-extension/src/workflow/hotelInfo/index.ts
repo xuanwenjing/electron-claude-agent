@@ -1,6 +1,6 @@
 /**
  * 对齐 wormhole content-common/matches/dataInjector：
- * navigate 结束后按平台取酒店信息写入 collector，同时给出登录态供 needLogin 校验：
+ * navigate 结束后按平台取门店信息写入 collector，同时给出登录态供 needLogin 校验：
  * - 携程 EBK / 携程酒店：在页面 MAIN world 提取
  * - 美团 / 飞猪 / 抖音：取页面接口被动捕获的数据（见 xhrHotelInfo）
  */
@@ -32,8 +32,8 @@ async function extractCtripEbkInfo(timeoutMs: number) {
 
   const ebkHotelInfo = (app.getHotelInfo?.() || {}) as Record<string, string>;
   const ebkUserInfo = (app.getUserInfo?.() || {}) as Record<string, string>;
-  hotelInfo.hotelName = ebkHotelInfo.hotelCName || ""; // 取中文酒店名
-  hotelInfo.hotelNameEn = ebkHotelInfo.hotelEName || ""; // 取中文酒店名
+  hotelInfo.hotelName = ebkHotelInfo.hotelCName || ""; // 取中文门店名
+  hotelInfo.hotelNameEn = ebkHotelInfo.hotelEName || ""; // 取中文门店名
   hotelInfo.hotelCode = ebkHotelInfo.masterHotelId?.toString() || "";
 
   return { hotelInfo, ebkHotelInfo, ebkUserInfo, isLogin: true };
@@ -135,12 +135,12 @@ function saveHotelInfo(
   setVariable(collector, HOTEL_INFO_KEY, { platform, ...value });
   const { hotelName, hotelCode } = value.hotelInfo || {};
   emit(
-    `已获取${PLATFORM_LABELS[platform]}酒店信息: ${hotelName || "-"}（${hotelCode || "-"}）${value.isLogin ? "（已登录）" : "（未登录）"}`,
+    `已获取${PLATFORM_LABELS[platform]}门店信息: ${hotelName || "-"}（${hotelCode || "-"}）${value.isLogin ? "（已登录）" : "（未登录）"}`,
   );
 }
 
 /**
- * 美团 / 飞猪 / 抖音：落在登录页即未登录；否则等本次导航后页面接口捕获的酒店信息，
+ * 美团 / 飞猪 / 抖音：落在登录页即未登录；否则等本次导航后页面接口捕获的门店信息，
  * 等待期间页面跳到登录页（单页应用加载完后才发现未登录）同样视为未登录；超时明确记录未获取到，不使用旧缓存。
  */
 async function collectXhrHotelInfo(
@@ -166,13 +166,13 @@ async function collectXhrHotelInfo(
   if (entry) {
     saveHotelInfo(collector, platform, { ...entry.value, isLogin: true }, emit);
   } else {
-    emit(`未捕获到${PLATFORM_LABELS[platform]}酒店信息（页面未请求酒店信息接口）`);
+    emit(`未捕获到${PLATFORM_LABELS[platform]}门店信息（页面未请求门店信息接口）`);
   }
   return { platform, isLogin: true };
 }
 
 /**
- * 按标签当前 URL（含重定向后）判断平台，提取酒店信息写入
+ * 按标签当前 URL（含重定向后）判断平台，提取门店信息写入
  * collector.variables._hotelInfo。
  * 提取失败只记日志，不中断 workflow；不在已知平台页时返回 null。
  * navigatedAt：本次 navigate 开始时间，用于区分接口捕获数据是否为本次页面产生。
@@ -206,12 +206,12 @@ export async function collectHotelInfo(
             func: extractCtripHotelInfo,
           });
     const value = injection?.result;
-    if (!value) throw new Error("页面未返回酒店信息");
+    if (!value) throw new Error("页面未返回门店信息");
 
     saveHotelInfo(collector, platform, value, emit);
     return { platform, isLogin: value.isLogin ?? false };
   } catch (err) {
-    emit(`获取酒店信息失败(${platform}): ${err instanceof Error ? err.message : String(err)}`);
+    emit(`获取门店信息失败(${platform}): ${err instanceof Error ? err.message : String(err)}`);
     return { platform, isLogin: false };
   }
 }

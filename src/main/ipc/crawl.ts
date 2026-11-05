@@ -13,6 +13,7 @@ import {
 } from "../crawl/bridgeServer";
 import {
   ensureExtensionConnected,
+  openInEdge,
   restartEdgeWithSiteUnblocked,
 } from "../crawl/edgeBrowser";
 import { type CrawlLogEntry, writeCrawlResultFile } from "../crawl/resultFile";
@@ -83,6 +84,12 @@ export function registerCrawlIpc(): void {
       return { ...result, resultPath };
     },
   );
+  ipcMain.handle("crawl:openUrl", async (_event, url: unknown) => {
+    if (typeof url !== "string" || !/^https?:\/\//i.test(url))
+      return { ok: false as const, error: "只能打开 http 或 https 地址" };
+    const error = await openInEdge(url);
+    return error ? { ok: false as const, error } : { ok: true as const };
+  });
   ipcMain.handle("crawl:reloadExtension", () => reloadExtension());
 }
 

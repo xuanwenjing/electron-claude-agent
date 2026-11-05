@@ -24,10 +24,7 @@ export type AuthApi = {
     mobile: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   login: (mobile: string, code: string) => Promise<AuthResult>;
-  switchOutlet: (
-    outletCode: string,
-    confirmed?: boolean,
-  ) => Promise<AuthResult>;
+  chooseOutlet: (outletCode: string) => Promise<AuthResult>;
   logout: (confirmed?: boolean) => Promise<AuthResult>;
   onSession: (handler: (session: AuthState) => void) => () => void;
 };

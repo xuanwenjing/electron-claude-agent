@@ -20,25 +20,39 @@ type Selection = {
 
 export function MerchantConnectionsPage() {
   const outlet = useAuthStore((state) => state.outlet);
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [jobs, setJobs] = useState<
+    Partial<Record<MerchantPlatformId, Selection>>
+  >({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const active = useRef<Selection | null>(null);
+  const jobsRef = useRef(jobs);
+  const running = useRef<MerchantPlatformId | null>(null);
   const busyRef = useRef(false);
   const alive = useRef(true);
   const version = useRef(0);
-  const select = (value: Selection | null) => {
-    active.current = value;
-    setSelection(value);
+  const writeJobs = (
+    next: Partial<Record<MerchantPlatformId, Selection>>,
+  ) => {
+    jobsRef.current = next;
+    setJobs(next);
+  };
+  const putJob = (job: Selection) =>
+    writeJobs({ ...jobsRef.current, [job.platformId]: job });
+  const clearJob = (platformId: MerchantPlatformId) => {
+    const next = { ...jobsRef.current };
+    delete next[platformId];
+    writeJobs(next);
   };
   const discard = () => {
     version.current++;
-    const task = active.current;
-    active.current = null;
-    if (task?.stage === "collecting")
-      void window.crawlApi.cancel(task.taskId).catch(() => {});
+    for (const task of Object.values(jobsRef.current)) {
+      if (task?.stage === "collecting")
+        void window.crawlApi.cancel(task.taskId).catch(() => {});
+    }
+    running.current = null;
     busyRef.current = false;
+    writeJobs({});
   };
   useEffect(() => {
     alive.current = true;
@@ -49,15 +63,15 @@ export function MerchantConnectionsPage() {
       )
         return;
       discard();
-      setSelection(null);
       setBusy(false);
       setError("");
       setNotice("");
     });
     const stopProgress = window.crawlApi.onProgress(({ taskId, message }) => {
-      const task = active.current;
-      if (task?.taskId === taskId && task.stage === "collecting")
-        select({ ...task, message });
+      const task = Object.values(jobsRef.current).find(
+        (item) => item?.taskId === taskId && item.stage === "collecting",
+      );
+      if (task) putJob({ ...task, message });
     });
     return () => {
       alive.current = false;
@@ -81,12 +95,13 @@ export function MerchantConnectionsPage() {
       if (!current()) return;
       const message =
         err instanceof z.ZodError
-          ? "未获取到有效酒店信息，请登录平台并选择酒店后重试"
+          ? "未获取到有效门店信息，请登录平台并选择门店后重试"
           : String((err as Error).message || err);
       setError(message);
-      const task = active.current;
-      if (task)
-        select({
+      const platformId = running.current;
+      const task = platformId ? jobsRef.current[platformId] : undefined;
+      if (platformId && task)
+        putJob({
           ...task,
           stage: task.stage === "binding" ? "ready" : "error",
           error: message,
@@ -102,23 +117,32 @@ export function MerchantConnectionsPage() {
     const result = await window.authApi.refresh();
     if (!result.ok) throw new Error(result.error);
   };
+  const openLogin = async (url: string) => {
+    const result = await window.crawlApi.openUrl(url);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setNotice("已在 Edge 打开该平台，登录并选择门店后点「重新获取」");
+  };
   const collect = (platform: (typeof MERCHANT_PLATFORMS)[number]) =>
     run(async (current) => {
       const taskId = crypto.randomUUID();
-      select({ taskId, platformId: platform.platform, stage: "collecting" });
+      running.current = platform.platform;
+      putJob({ taskId, platformId: platform.platform, stage: "collecting" });
       const result = await window.crawlApi.start(
         {
           platform: platform.platform,
           needLogin: true,
           maxRetry: 0,
           workflow: [
-            { type: "navigate", url: platform.home, name: "获取商家酒店信息" },
+            { type: "navigate", url: platform.home, name: "获取商家门店信息" },
           ],
         },
         taskId,
       );
       if (!current()) return;
-      if (!result.ok) throw new Error(result.error || "酒店信息获取失败");
+      if (!result.ok) throw new Error(result.error || "门店信息获取失败");
       const info = z
         .object({
           variables: z.object({
@@ -133,24 +157,25 @@ export function MerchantConnectionsPage() {
           }),
         })
         .parse(result.data).variables._hotelInfo;
-      select({
+      putJob({
         taskId,
         platformId: platform.platform,
         stage: "ready",
         candidate: info.hotelInfo,
       });
     });
-  const confirm = () =>
+  const confirm = (platformId: MerchantPlatformId) =>
     run(async (current) => {
-      const task = active.current;
+      const task = jobsRef.current[platformId];
       const session = useAuthStore.getState();
       const target = session.outlet;
       if (!task?.candidate || task.stage !== "ready" || !target) return;
+      running.current = platformId;
       if (
         target.external_outlets.some((item) => item.group === task.platformId)
       )
         throw new Error("该平台已绑定，请刷新状态");
-      select({ ...task, stage: "binding", error: undefined });
+      putJob({ ...task, stage: "binding", error: undefined });
       const result = await window.requestApi.post("/admin/outlets/bind", {
         outlet_code: target.outlet_code,
         outlet_name: target.outlet_name,
@@ -188,7 +213,7 @@ export function MerchantConnectionsPage() {
           )!,
         };
       });
-      select(null);
+      clearJob(platformId);
       setNotice("绑定成功");
       try {
         await refresh();
@@ -196,10 +221,16 @@ export function MerchantConnectionsPage() {
         if (current()) setNotice("绑定成功，资料刷新失败，可稍后点击刷新状态");
       }
     });
-  const cancel = () => {
-    discard();
-    setSelection(null);
-    setBusy(false);
+  const cancel = (platformId: MerchantPlatformId) => {
+    const task = jobsRef.current[platformId];
+    if (task?.stage === "collecting") {
+      version.current++;
+      void window.crawlApi.cancel(task.taskId).catch(() => {});
+      busyRef.current = false;
+      setBusy(false);
+      if (running.current === platformId) running.current = null;
+    }
+    clearJob(platformId);
     setError("");
   };
   if (!outlet) return null;
@@ -211,7 +242,7 @@ export function MerchantConnectionsPage() {
           <h2 className="text-xl font-semibold">商家连接</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             当前门店：{outlet.outlet_name}
-            。获取平台酒店信息后，请核对再确认绑定。
+            。获取平台门店信息后，请核对再确认绑定。
           </p>
         </div>
         <Button
@@ -219,6 +250,7 @@ export function MerchantConnectionsPage() {
           disabled={busy}
           onClick={() =>
             void run(async (current) => {
+              running.current = null;
               await refresh();
               if (current()) setNotice("绑定状态已刷新");
             })
@@ -248,8 +280,7 @@ export function MerchantConnectionsPage() {
           const bindings = outlet.external_outlets.filter(
             (item) => item.group === platform.platform,
           );
-          const task =
-            selection?.platformId === platform.platform ? selection : null;
+          const task = jobs[platform.platform];
           return (
             <Card key={platform.platform}>
               <CardHeader>
@@ -269,7 +300,7 @@ export function MerchantConnectionsPage() {
                     >
                       <p className="font-medium">{binding.name}</p>
                       <p className="break-all text-muted-foreground">
-                        酒店编号：{binding.code}
+                        门店编号：{binding.code}
                       </p>
                     </div>
                   ))
@@ -278,12 +309,12 @@ export function MerchantConnectionsPage() {
                     {!task && (
                       <p className="text-sm text-muted-foreground">
                         打开{platform.name}
-                        商家首页，读取当前登录账号的酒店信息。
+                        商家首页，读取当前登录账号的门店信息。
                       </p>
                     )}
                     {task?.stage === "collecting" && (
                       <div role="status" className="space-y-1 text-sm">
-                        <p>正在获取酒店信息…</p>
+                        <p>正在获取门店信息…</p>
                         <p className="break-all text-muted-foreground">
                           {task.message || "正在打开平台首页"}
                         </p>
@@ -292,17 +323,17 @@ export function MerchantConnectionsPage() {
                     {task?.error && (
                       <p role="alert" className="text-sm text-red-600">
                         {task.error}。请在 Edge
-                        中登录对应平台并选择正确酒店后重试。
+                        中登录对应平台并选择正确门店后重试。
                       </p>
                     )}
                     {task?.candidate && (
                       <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
                         <p className="font-medium">
-                          请确认以下酒店属于「{outlet.outlet_name}」
+                          请确认以下门店属于「{outlet.outlet_name}」
                         </p>
-                        <p>酒店名称：{task.candidate.hotelName}</p>
+                        <p>门店名称：{task.candidate.hotelName}</p>
                         <p className="break-all">
-                          酒店编号：{task.candidate.hotelCode}
+                          门店编号：{task.candidate.hotelCode}
                         </p>
                         <p className="text-muted-foreground">
                           确认后将绑定到当前门店。
@@ -311,23 +342,44 @@ export function MerchantConnectionsPage() {
                     )}
                     <div className="flex flex-wrap gap-2">
                       {task?.stage === "ready" ? (
-                        <Button disabled={busy} onClick={() => void confirm()}>
+                        <Button
+                          disabled={busy}
+                          onClick={() => void confirm(platform.platform)}
+                        >
                           确认绑定
                         </Button>
                       ) : task?.stage === "binding" ? (
                         <Button disabled>正在绑定…</Button>
                       ) : (
                         task?.stage !== "collecting" && (
-                          <Button
-                            disabled={busy || working}
-                            onClick={() => void collect(platform)}
-                          >
-                            {task?.stage === "error" ? "重新获取" : "连接商家"}
-                          </Button>
+                          <>
+                            {task?.stage === "error" && (
+                              <Button
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() =>
+                                  void openLogin(platform.home)
+                                }
+                              >
+                                去登录
+                              </Button>
+                            )}
+                            <Button
+                              disabled={busy || working}
+                              onClick={() => void collect(platform)}
+                            >
+                              {task?.stage === "error"
+                                ? "重新获取"
+                                : "连接商家"}
+                            </Button>
+                          </>
                         )
                       )}
                       {task && task.stage !== "binding" && (
-                        <Button variant="outline" onClick={cancel}>
+                        <Button
+                          variant="outline"
+                          onClick={() => cancel(platform.platform)}
+                        >
                           取消
                         </Button>
                       )}

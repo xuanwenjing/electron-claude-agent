@@ -33,10 +33,8 @@ export function registerAuthIpc(): void {
       session: await authSession.login(mobile, code),
     })),
   );
-  ipcMain.handle(
-    "auth:switchOutlet",
-    (_event, code: unknown, confirmed: unknown) =>
-      protect(() => authSession.switchOutlet(code, confirmed === true)),
+  ipcMain.handle("auth:chooseOutlet", (_event, code: unknown) =>
+    protect(() => ({ ok: true, session: authSession.chooseOutlet(code) })),
   );
   ipcMain.handle("auth:logout", (_event, confirmed: unknown) =>
     protect(() => authSession.logout(confirmed === true)),

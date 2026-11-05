@@ -1,6 +1,6 @@
 import { normalizePlatform } from "../../shared/merchant";
 import { z } from "zod";
-import type { AuthResult, AuthState, Outlet } from "../../shared/auth";
+import type { AuthResult, AuthState } from "../../shared/auth";
 
 const profileSchema = z.object({
   id: z.number(),
@@ -99,14 +99,15 @@ export class AuthSession {
         this.clear("登录已过期");
         return this.state;
       }
-      const outlet =
-        user.outlets.find((item) => item.outlet_code === saved.outletCode) ??
-        user.outlets[0];
-      if (!outlet) {
+      if (!user.outlets.length) {
         this.clear("当前账号没有可用门店");
         return this.state;
       }
-      this.persistence?.save({ ...saved, outletCode: outlet.outlet_code });
+      const outlet =
+        user.outlets.find((item) => item.outlet_code === saved.outletCode) ??
+        (user.outlets.length === 1 ? user.outlets[0] : null);
+      if (outlet)
+        this.persistence?.save({ ...saved, outletCode: outlet.outlet_code });
       this.token = saved.token;
       this.expiresAt = saved.expiresAt;
       this.state = { user, outlet };
@@ -194,16 +195,18 @@ export class AuthSession {
       const user = profileSchema.parse(
         await this.post("/api/auth/me", {}, credentials.access_token),
       );
-      const outlet = user.outlets[0];
-      if (!outlet)
+      if (!user.outlets.length)
         throw new Error("当前账号没有可用门店，请联系管理员分配门店");
-      this.persistence?.save({
-        token: credentials.access_token,
-        expiresAt,
-        outletCode: outlet.outlet_code,
-      });
+      const outlet = user.outlets.length === 1 ? user.outlets[0] : null;
       this.token = credentials.access_token;
       this.expiresAt = expiresAt;
+      if (outlet) {
+        this.persistence?.save({
+          token: credentials.access_token,
+          expiresAt,
+          outletCode: outlet.outlet_code,
+        });
+      }
       this.state = { user, outlet };
       this.revision++;
       this.restored = true;
@@ -215,13 +218,16 @@ export class AuthSession {
     }
   }
   async refresh(): Promise<AuthState> {
-    const context = this.requireContext();
+    const state = this.getState();
+    if (!state.user) throw new Error("请先登录");
+    if (this.changing) throw new Error("正在切换登录状态，请稍后再试");
+    if (!state.outlet) throw new Error("请先选择门店");
+    const outletCode = state.outlet.outlet_code;
+    const revision = this.revision;
     const user = profileSchema.parse(await this.post("/api/auth/me", {}));
-    if (!this.isCurrent(context.revision))
+    if (!this.getState().user || this.changing || revision !== this.revision)
       throw new Error("门店或登录状态已变更，请重试");
-    const outlet = user.outlets.find(
-      (item) => item.outlet_code === context.outlet.outlet_code,
-    );
+    const outlet = user.outlets.find((item) => item.outlet_code === outletCode);
     if (!outlet) {
       this.clear("当前门店访问权限已失效");
       throw new Error("当前门店已不可用，请重新登录");
@@ -230,49 +236,29 @@ export class AuthSession {
     this.onChange(this.state);
     return this.state;
   }
-  requireContext(): { outlet: Outlet; revision: number } {
-    const state = this.getState();
-    if (!state.user) throw new Error("请先登录");
-    if (this.changing) throw new Error("正在切换登录状态，请稍后再试");
-    if (!state.outlet)
-      throw new Error("当前账号没有可用门店，请联系管理员分配门店");
-    return { outlet: state.outlet, revision: this.revision };
-  }
-  isCurrent(revision: number): boolean {
-    return (
-      !!this.getState().user && !this.changing && revision === this.revision
-    );
-  }
   getRequestContext(): { token?: string; outletCode?: string } {
     const state = this.getState();
     return state.user
       ? { token: this.token, outletCode: state.outlet?.outlet_code }
       : {};
   }
-  switchOutlet(code: unknown, confirmed: boolean): AuthResult {
-    this.requireContext();
-    const outlet = this.state.user!.outlets.find(
-      (item) => item.outlet_code === code,
-    );
+  chooseOutlet(code: unknown): AuthState {
+    if (this.changing) throw new Error("正在处理，请稍后再试");
+    const user = this.state.user;
+    if (!user) throw new Error("请先登录");
+    if (this.state.outlet) throw new Error("已进入门店，请退出登录后重新选择");
+    if (typeof code !== "string" || !code) throw new Error("请选择门店");
+    const outlet = user.outlets.find((item) => item.outlet_code === code);
     if (!outlet) throw new Error("无权访问该门店");
-    if (outlet.outlet_code === this.state.outlet?.outlet_code)
-      return { ok: true, session: this.state };
-    if (this.tasks.hasActive() && !confirmed)
-      return {
-        ok: false,
-        confirmationRequired: true,
-        error: "切换门店会中断进行中的抓取任务，是否继续？",
-      };
     this.persistence?.save({
       token: this.token,
       expiresAt: this.expiresAt,
       outletCode: outlet.outlet_code,
     });
-    this.tasks.cancel("切换门店，抓取任务已取消");
-    this.state = { ...this.state, outlet };
+    this.state = { user, outlet };
     this.revision++;
     this.onChange(this.state);
-    return { ok: true, session: this.state };
+    return this.state;
   }
   async logout(confirmed: boolean): Promise<AuthResult> {
     if (this.changing) throw new Error("正在处理，请稍后再试");

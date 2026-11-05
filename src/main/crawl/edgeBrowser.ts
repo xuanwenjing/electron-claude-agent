@@ -43,6 +43,34 @@ function spawnDetached(cmd: string, args: string[]): Promise<{ ok: boolean; outp
   });
 }
 
+/**
+ * 在 Edge 里新开一个窗口打开页面。
+ * 不复用已有窗口，避免落到带蒙层的采集窗口里。返回失败原因。
+ */
+export async function openInEdge(url: string): Promise<string | null> {
+  if (process.platform === "darwin") {
+    if (!EDGE_APP_MAC_PATHS.some((p) => fs.existsSync(p)))
+      return "未找到 Microsoft Edge（/Applications/Microsoft Edge.app）";
+    const res = await execResult("open", [
+      "-n",
+      "-a",
+      EDGE_APP_MAC,
+      "--args",
+      "--new-window",
+      url,
+    ]);
+    return res.ok ? null : `打开 Edge 失败：${res.output}`;
+  }
+  if (process.platform === "win32") {
+    const exe = windowsEdgePath();
+    if (!exe)
+      return "未找到 msedge.exe（Program Files / LocalAppData 下的 Microsoft\\Edge\\Application）";
+    const res = await spawnDetached(exe, ["--new-window", url]);
+    return res.ok ? null : `打开 Edge 失败：${res.output}`;
+  }
+  return `暂不支持在 ${process.platform} 上打开 Edge`;
+}
+
 /** 按当前系统启动（或唤起已运行的）Edge，返回失败原因 */
 async function launchEdge(log: (msg: string) => void): Promise<string | null> {
   if (process.platform === "darwin") {

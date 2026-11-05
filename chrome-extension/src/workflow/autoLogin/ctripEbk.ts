@@ -26,7 +26,7 @@ async function submitLoginForm(): Promise<AutoLoginResult> {
   if (!hasUsername || !hasPassword) {
     return {
       success: false,
-      errorMessage: `密码管理器未填充账号密码（username=${hasUsername}, password=${hasPassword}），请确认该 Chrome 中已为 ebooking.ctrip.com 保存且仅保存一个账号`,
+      errorMessage: `密码管理器未填充账号密码（username=${hasUsername}, password=${hasPassword}），请确认该 Edge 中已为 ebooking.ctrip.com 保存且仅保存一个账号`,
     };
   }
 
@@ -44,6 +44,7 @@ async function submitLoginForm(): Promise<AutoLoginResult> {
 }
 
 export async function tryAutoLoginCtripEbk(tabId: number): Promise<AutoLoginResult> {
+  if (await sendCdpClickBySelector(tabId, "#toggle_account_login")) await sleep(2000);
   if (!(await sendCdpClickBySelector(tabId, 'input[name="password-input"]'))) {
     return { success: false, errorMessage: "登录页未找到密码输入框，可能不在账号密码登录模式" };
   }

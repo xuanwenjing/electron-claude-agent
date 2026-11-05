@@ -31,17 +31,17 @@ export const MERCHANT_PLATFORMS = [
   {
     name: "携程",
     platform: HotelPlatform.CtripEbk,
-    home: "https://ebooking.ctrip.com/",
+    home: "https://ebooking.ctrip.com/home/mainland?microJump=true",
   },
   {
     name: "美团",
     platform: HotelPlatform.Meituan,
-    home: "https://me.meituan.com/",
+    home: "https://me.meituan.com/ebooking/merchant/comment-manage-react#/home",
   },
   {
     name: "飞猪",
     platform: HotelPlatform.Fliggy,
-    home: "https://hotel.fliggy.com/",
+    home: "https://hotel.fliggy.com/ebooking/hotelBaseInfoUv.htm",
   },
   {
     name: "抖音",

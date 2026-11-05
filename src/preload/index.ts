@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld("crawlApi", {
   reloadExtension: (): Promise<
     { ok: true; taskId: string } | { ok: false; error: string }
   > => ipcRenderer.invoke("crawl:reloadExtension"),
+  openUrl: (
+    url: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke("crawl:openUrl", url),
   onStatus: (handler: (data: { connected: boolean; port: number }) => void) => {
     const listener = (
       _: Electron.IpcRendererEvent,
@@ -109,8 +113,7 @@ const authApi: AuthApi = {
   refresh: () => ipcRenderer.invoke("auth:refresh"),
   sendSms: (mobile) => ipcRenderer.invoke("auth:sendSms", mobile),
   login: (mobile, code) => ipcRenderer.invoke("auth:login", mobile, code),
-  switchOutlet: (code, confirmed = false) =>
-    ipcRenderer.invoke("auth:switchOutlet", code, confirmed),
+  chooseOutlet: (code) => ipcRenderer.invoke("auth:chooseOutlet", code),
   logout: (confirmed = false) => ipcRenderer.invoke("auth:logout", confirmed),
   onSession: (handler) => {
     const listener = (

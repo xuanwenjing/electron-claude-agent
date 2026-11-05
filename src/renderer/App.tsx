@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { MerchantConnectionsPage } from "@/pages/MerchantConnectionsPage";
 import { ExtensionConnectionGuide } from "@/components/ExtensionConnectionGuide";
 import { LoginPage } from "@/pages/LoginPage";
+import { OutletPicker } from "@/components/OutletPicker";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useEffect } from "react";
 import { AppShell } from "@/layouts/AppShell";
@@ -60,6 +61,25 @@ export function App() {
       </div>
     );
   if (!user) return <LoginPage />;
+  if (!outlet)
+    return user.outlets.length > 1 ? (
+      <OutletPicker />
+    ) : (
+      <div className="flex min-h-full items-center justify-center p-6">
+        <section className="w-full max-w-md space-y-4 rounded-lg border bg-card p-6">
+          <p className="text-muted-foreground">
+            当前账号没有可用门店，请联系管理员分配门店。
+          </p>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => void resetLogin()}
+          >
+            退出登录
+          </Button>
+        </section>
+      </div>
+    );
   if (!connected)
     return (
       <AppShell>
@@ -70,13 +90,7 @@ export function App() {
   return (
     <AppShell>
       <div className={panel === "crawl" ? "contents" : "hidden"}>
-        {outlet ? (
-          <CrawlPage />
-        ) : (
-          <p className="rounded-md border p-6 text-muted-foreground">
-            当前账号没有可用门店，请联系管理员分配门店。
-          </p>
-        )}
+        <CrawlPage />
       </div>
       <div className={panel === "merchants" ? "contents" : "hidden"}>
         <MerchantConnectionsPage key={`${user.id}:${outlet?.outlet_code}`} />
