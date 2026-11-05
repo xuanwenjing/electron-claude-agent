@@ -1,3 +1,4 @@
+import { authSession } from "../auth";
 import { crawlTasks } from "../crawl/taskManager";
 import { randomUUID } from "node:crypto";
 import { ipcMain, shell } from "electron";
@@ -49,6 +50,12 @@ export function registerCrawlIpc(): void {
     async (_event, config: unknown, suppliedTaskId?: unknown) => {
       if (!config || typeof config !== "object" || Array.isArray(config))
         return { ok: false, error: "抓取配置必须为对象" };
+      const outlet = authSession.getState().outlet;
+      Object.assign(config, {
+        outlet_code: outlet?.outlet_code ?? "",
+        outlet_name: outlet?.outlet_name ?? "",
+        external_outlets: outlet?.external_outlets ?? [],
+      });
       const taskId =
         typeof suppliedTaskId === "string" && suppliedTaskId
           ? suppliedTaskId

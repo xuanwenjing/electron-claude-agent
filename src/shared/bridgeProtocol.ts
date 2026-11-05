@@ -36,6 +36,8 @@ export const ToClient = {
 export const TaskErrorCode = {
   /** platform + needLogin 校验未通过 */
   NotLoggedIn: "NOT_LOGGED_IN",
+  /** 已绑定的平台门店编号与页面抓到的不一致，不再重试 */
+  OutletMismatch: "OUTLET_MISMATCH",
   /** 主动取消、断连、扩展重载导致的取消 */
   Cancelled: "CANCELLED",
   /** 超过扩展侧任务超时 */

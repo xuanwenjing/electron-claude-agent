@@ -34,7 +34,9 @@ import {
   setNetworkCaptureContext,
 } from "./collect";
 import { tryAutoLogin } from "./autoLogin";
+import { OutletMismatchError, assertBoundOutlet } from "./boundOutlet";
 import {
+  HOTEL_INFO_KEY,
   NotLoggedInError,
   assertLoggedIn,
   collectHotelInfo,
@@ -190,6 +192,7 @@ export async function runWorkflow(
             }
           }
           assertLoggedIn(config, url, hotelInfo, autoLoginError);
+          assertBoundOutlet(config.external_outlets, collector.variables[HOTEL_INFO_KEY]);
           await waitAfterAction(workflowItem, NAVIGATE_CAPTURE_TIMEOUT_MS);
         } else if (workflowItem.type === "call_api") {
           stepResult = await handleApiFetch(tabId, collector, workflowItem, emit, stepToken);
@@ -350,6 +353,15 @@ export async function runWorkflow(
         const error = `浏览器已设置不允许在 ${blockedOrigin} 使用扩展`;
         emit(error);
         return { ok: false, error, errorCode: TaskErrorCode.SiteBlocked, blockedOrigin, data: null };
+      }
+      if (err instanceof OutletMismatchError) {
+        emit(err.message);
+        return {
+          ok: false,
+          error: err.message,
+          errorCode: TaskErrorCode.OutletMismatch,
+          data: null,
+        };
       }
       const notLoggedIn =
         closedTabId != null ? null : err instanceof NotLoggedInError ? err : await loginPageError(tabId);

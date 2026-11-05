@@ -85,6 +85,7 @@ test("crawl IPC returns final results directly, retries once and cancels pending
       },
     },
     "../window": { sendToRenderer: (...args) => events.push(args) },
+    "../auth": { authSession: { getState: () => ({ outlet: null }) } },
   });
   api.registerCrawlIpc();
   api.startCrawlBridge();

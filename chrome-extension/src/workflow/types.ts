@@ -122,6 +122,11 @@ export interface WorkflowConfig {
   platform?: HotelPlatform;
   /** true 时：navigate 到 platform 对应站点后必须已登录，未登录先尝试自动登录，仍失败则任务直接失败（不重试） */
   needLogin?: boolean;
+  /** 启动任务时的账号门店，由客户端写入，并随结果保存 */
+  outlet_code?: string;
+  outlet_name?: string;
+  /** 当前账号门店已绑定的平台门店；group 为平台值，code 为平台门店编号。由客户端在启动任务时写入 */
+  external_outlets?: Array<{ code: string; name?: string; group: string }>;
 }
 
 export interface Collector {
