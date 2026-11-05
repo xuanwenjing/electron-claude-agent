@@ -1,8 +1,8 @@
+import { useAuthStore } from "./useAuthStore";
 import { create } from "zustand";
-import type { CrawlResultEvent, CrawlResultRow, LogKind, LogLine } from "@/api/types";
+import type { LogKind, LogLine } from "@/api/types";
 import { BRIDGE_PORT } from "../../shared/bridgeProtocol";
 import { SAMPLE_CRAWL_CONFIG } from "../sampleConfig";
-import { useNotesStore } from "./useNotesStore";
 
 type CrawlState = {
   connected: boolean;
@@ -10,7 +10,6 @@ type CrawlState = {
   /** 浏览器「加载解压缩的扩展」应选择的目录 */
   extensionDir: string;
   configText: string;
-  results: CrawlResultRow[];
   logs: LogLine[];
   starting: boolean;
   reloading: boolean;
@@ -19,13 +18,12 @@ type CrawlState = {
   appendLog: (kind: LogKind, text: string) => void;
   clearLogs: () => void;
   init: () => void;
-  refreshResults: () => Promise<void>;
   start: () => Promise<void>;
   reloadExtension: () => Promise<void>;
-  openXiaohongshu: () => Promise<void>;
   revealExtensionDir: () => Promise<void>;
 };
 
+let startRequest = 0;
 let unsubs: Array<() => void> = [];
 
 export const useCrawlStore = create<CrawlState>((set, get) => ({
@@ -33,7 +31,6 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
   port: BRIDGE_PORT,
   extensionDir: "",
   configText: JSON.stringify(SAMPLE_CRAWL_CONFIG, null, 2),
-  results: [],
   logs: [],
   starting: false,
   reloading: false,
@@ -55,37 +52,25 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
     if (get().inited) return;
     for (const u of unsubs) u();
     unsubs = [
-      window.crawlApi.onStatus(({ connected, port }) => set({ connected, port })),
+      window.crawlApi.onStatus(({ connected, port }) =>
+        set({ connected, port }),
+      ),
       window.crawlApi.onProgress(({ taskId, message }) => {
         get().appendLog("log", `[crawl ${taskId.slice(0, 8)}] ${message}`);
-      }),
-      window.crawlApi.onResult((raw) => {
-        const msg = raw as CrawlResultEvent;
-        get().appendLog(
-          msg.ok ? "log" : "error",
-          `[crawl 结果] ${msg.ok ? "已入库" : msg.error || "失败"}${!msg.ok && msg.errorCode ? ` [${msg.errorCode}]` : ""}${msg.resultPath ? `，已保存 ${msg.resultPath}` : ""}`,
-        );
-        void get().refreshResults();
-        void useNotesStore.getState().refresh();
       }),
     ];
     void window.crawlApi
       .getStatus()
-      .then(({ connected, port, extensionDir }) => set({ connected, port, extensionDir }));
-    void get().refreshResults();
+      .then(({ connected, port, extensionDir }) =>
+        set({ connected, port, extensionDir }),
+      );
     set({ inited: true });
   },
 
-  refreshResults: async () => {
-    const res = await window.crawlApi.listResults();
-    if (!res.ok) {
-      get().appendLog("error", res.error);
-      return;
-    }
-    set({ results: res.rows });
-  },
-
   start: async () => {
+    const outlet = useAuthStore.getState().outlet;
+    if (!outlet) return;
+    const request = ++startRequest;
     let config: unknown;
     try {
       config = JSON.parse(get().configText);
@@ -99,13 +84,15 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
     set({ starting: true });
     try {
       const res = await window.crawlApi.start(config);
-      if (!res.ok) {
-        get().appendLog("error", res.resultPath ? `${res.error}，已保存 ${res.resultPath}` : res.error);
-        return;
-      }
-      get().appendLog("log", `已下发抓取任务 ${res.taskId}`);
+      if (useAuthStore.getState().outlet !== outlet) return;
+      get().appendLog(
+        res.ok ? "log" : "error",
+        `[crawl ${res.taskId?.slice(0, 8) || "结果"}] ${res.ok ? "抓取完成" : res.error || "失败"}${res.errorCode ? ` [${res.errorCode}]` : ""}${res.resultPath ? `，已保存 ${res.resultPath}` : ""}`,
+      );
+    } catch (error) {
+      get().appendLog("error", `抓取失败: ${String(error)}`);
     } finally {
-      set({ starting: false });
+      if (request === startRequest) set({ starting: false });
     }
   },
 
@@ -124,15 +111,6 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
     } finally {
       set({ reloading: false });
     }
-  },
-
-  openXiaohongshu: async () => {
-    const res = await window.crawlApi.openXiaohongshu();
-    if (!res.ok) {
-      get().appendLog("error", `打开小红书失败: ${res.error}`);
-      return;
-    }
-    get().appendLog("log", "已用 Google Chrome 打开 https://www.xiaohongshu.com");
   },
 
   revealExtensionDir: async () => {

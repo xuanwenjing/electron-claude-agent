@@ -93,7 +93,7 @@ async function readCache(): Promise<Partial<Record<HotelPlatform, CacheEntry>>> 
   return (stored[STORAGE_KEY] ?? {}) as Partial<Record<HotelPlatform, CacheEntry>>;
 }
 
-/** background 收到任意 XHR 都调用；命中平台酒店信息接口则解析并缓存 */
+/** background 收到任意 XHR 都调用；命中平台酒店信息接口则解析并缓存，不区分来自哪个标签 */
 export async function captureHotelInfoFromXhr(data: XhrCapturePayload | undefined): Promise<void> {
   if (!data?.api) return;
   const source = XHR_SOURCES.find((s) => s.apis.some((api) => data.api.includes(api)));
@@ -109,7 +109,7 @@ export async function getCachedHotelInfo(platform: HotelPlatform): Promise<Cache
   return (await readCache())[platform] ?? null;
 }
 
-/** 等待 since 之后捕获到的酒店信息；shouldStop 为真（如页面跳到登录页）提前返回 stopped */
+/** 等待 since 之后捕获到的酒店信息，不限标签；shouldStop 为真（如页面跳到登录页）提前返回 stopped */
 export async function waitFreshHotelInfo(
   platform: HotelPlatform,
   since: number,

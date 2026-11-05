@@ -28,9 +28,8 @@ npm start
 | `src/main/index.ts` | 应用生命周期入口 |
 | `src/main/agent/` | workflow `run_agent`：`workflowAgent.ts` 管理工作空间与任务清理，`skillPackage.ts` 下载安装 Skill，`runAgent.ts` 调用 `query()`，`pythonMcp.ts` 工具，`resolveClaudeCli.ts` 解析 Claude 原生二进制 |
 | `src/main/crawl/` | 与 Chrome 扩展通信的 WebSocket bridge、打开浏览器 |
-| `src/main/ipc/` | 渲染进程 IPC 处理（api / crawl / db / update） |
+| `src/main/ipc/` | 渲染进程 IPC 处理（auth / api / crawl / update） |
 | `src/main/update/` | 客户端自动更新、Chrome 扩展安装与远程更新 |
-| `src/main/db/` | SQLite（drizzle） |
 | `workspace/` | 客户端数据目录：抓取结果 `crawl/`、run_agent 工作空间 `agent-runs/`（打包后在 userData） |
 | `build/entitlements.mac.plist` | macOS 允许 spawn 子进程 |
 

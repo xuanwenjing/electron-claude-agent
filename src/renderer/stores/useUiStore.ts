@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type PanelId = "crawl" | "update" | "notes";
+export type PanelId = "crawl" | "merchants" | "update";
 
 type UiState = {
   currentPanel: PanelId;

@@ -1,3 +1,5 @@
+import { HotelPlatform } from "../../../src/shared/merchant";
+export { HotelPlatform } from "../../../src/shared/merchant";
 import type { TaskErrorCode } from "../../../src/shared/bridgeProtocol";
 
 export type WorkflowStepType =
@@ -121,16 +123,6 @@ export interface WorkflowConfig {
   /** true 时：navigate 到 platform 对应站点后必须已登录，未登录先尝试自动登录，仍失败则任务直接失败（不重试） */
   needLogin?: boolean;
 }
-
-export const HotelPlatform = {
-  CtripEbk: "ctripEbk",
-  CtripHotel: "ctripHotel",
-  Meituan: "meituan",
-  Douyin: "douyin",
-  Fliggy: "fliggy",
-} as const;
-
-export type HotelPlatform = (typeof HotelPlatform)[keyof typeof HotelPlatform];
 
 export interface Collector {
   variables: Record<string, unknown>;

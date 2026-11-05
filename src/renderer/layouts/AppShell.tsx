@@ -1,4 +1,5 @@
-import { Bug, Database, Download } from "lucide-react";
+import { OutletSwitcher } from "@/components/OutletSwitcher";
+import { Bug, Download, Store } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,8 +10,8 @@ import { type PanelId, useUiStore } from "@/stores/useUiStore";
 
 const navItems: Array<{ id: PanelId; label: string; icon: typeof Bug }> = [
   { id: "crawl", label: "抓取", icon: Bug },
+  { id: "merchants", label: "商家连接", icon: Store },
   { id: "update", label: "更新", icon: Download },
-  { id: "notes", label: "笔记", icon: Database },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -25,8 +26,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Electron
           </p>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight">Claude Agent</h1>
+          <h1 className="mt-1 text-lg font-semibold tracking-tight">
+            Claude Agent
+          </h1>
         </div>
+        <OutletSwitcher />
         <Separator />
         <nav className="flex flex-1 flex-col gap-1 p-2">
           {navItems.map(({ id, label, icon: Icon }) => (
@@ -35,7 +39,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               variant="ghost"
               className={cn(
                 "justify-start gap-2",
-                currentPanel === id && "bg-sidebar-accent text-accent-foreground",
+                currentPanel === id &&
+                  "bg-sidebar-accent text-accent-foreground",
               )}
               onClick={() => setPanel(id)}
             >
@@ -45,7 +50,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="p-3">
-          <Badge variant={connected ? "success" : "secondary"} className="w-full justify-center">
+          <Badge
+            variant={connected ? "success" : "secondary"}
+            className="w-full justify-center"
+          >
             扩展 {connected ? "已连接" : "未连接"}
           </Badge>
         </div>

@@ -7,7 +7,7 @@
 import { PLATFORM_LABELS, detectPlatform, isLoginUrl, isOnLoginPage, loginPlatformOf } from "../platform";
 import { HotelPlatform, type Collector, type EmitFn } from "../types";
 import { setVariable } from "../variables";
-import { getCachedHotelInfo, waitFreshHotelInfo } from "./xhrHotelInfo";
+import { waitFreshHotelInfo } from "./xhrHotelInfo";
 
 export { captureHotelInfoFromXhr, getCachedHotelInfo } from "./xhrHotelInfo";
 
@@ -131,18 +131,17 @@ function saveHotelInfo(
   platform: HotelPlatform,
   value: { hotelInfo?: { hotelName?: string; hotelCode?: string }; isLogin?: boolean } & Record<string, unknown>,
   emit: EmitFn,
-  note = "",
 ): void {
   setVariable(collector, HOTEL_INFO_KEY, { platform, ...value });
   const { hotelName, hotelCode } = value.hotelInfo || {};
   emit(
-    `已获取${PLATFORM_LABELS[platform]}酒店信息${note}: ${hotelName || "-"}（${hotelCode || "-"}）${value.isLogin ? "（已登录）" : "（未登录）"}`,
+    `已获取${PLATFORM_LABELS[platform]}酒店信息: ${hotelName || "-"}（${hotelCode || "-"}）${value.isLogin ? "（已登录）" : "（未登录）"}`,
   );
 }
 
 /**
  * 美团 / 飞猪 / 抖音：落在登录页即未登录；否则等本次导航后页面接口捕获的酒店信息，
- * 等待期间页面跳到登录页（单页应用加载完后才发现未登录）同样视为未登录；超时则退回上一次缓存。
+ * 等待期间页面跳到登录页（单页应用加载完后才发现未登录）同样视为未登录；超时明确记录未获取到，不使用旧缓存。
  */
 async function collectXhrHotelInfo(
   tabId: number,
@@ -157,16 +156,15 @@ async function collectXhrHotelInfo(
     return { platform, isLogin: false };
   };
   if (isLoginUrl(tabUrl, platform)) return notLoggedIn();
-  const { entry: fresh, stopped } = await waitFreshHotelInfo(
+  const { entry, stopped } = await waitFreshHotelInfo(
     platform,
     navigatedAt,
     XHR_HOTEL_INFO_WAIT_MS,
     () => isOnLoginPage(tabId, platform).catch(() => false),
   );
   if (stopped) return notLoggedIn();
-  const entry = fresh ?? (await getCachedHotelInfo(platform));
   if (entry) {
-    saveHotelInfo(collector, platform, { ...entry.value, isLogin: true }, emit, fresh ? "" : "（缓存）");
+    saveHotelInfo(collector, platform, { ...entry.value, isLogin: true }, emit);
   } else {
     emit(`未捕获到${PLATFORM_LABELS[platform]}酒店信息（页面未请求酒店信息接口）`);
   }
@@ -185,6 +183,7 @@ export async function collectHotelInfo(
   emit: EmitFn,
   navigatedAt = Date.now(),
 ): Promise<HotelInfoResult> {
+  setVariable(collector, HOTEL_INFO_KEY, undefined);
   const tab = await chrome.tabs.get(tabId);
   const platform = detectPlatform(tab.url);
   if (!platform) return null;

@@ -5,7 +5,7 @@ import { app, dialog, type BrowserWindow } from "electron";
 import type { UpdateInfo } from "electron-updater";
 import { autoUpdater } from "./updater";
 
-import { hasInflightCrawlTasks } from "../crawl/bridgeServer";
+import { hasActiveCrawlTasks } from "../crawl/bridgeServer";
 
 export type UpdateStatusEvent = {
   kind:
@@ -28,11 +28,15 @@ let configured = false;
 let updating = false;
 let updateReady = false;
 let updateWindow: GetWindow = () => null;
-let lastStatus: UpdateStatusEvent = { kind: "not-available", message: "尚未检查" };
+let lastStatus: UpdateStatusEvent = {
+  kind: "not-available",
+  message: "尚未检查",
+};
 
 // Prevent concurrent downloads or replacing an installer that is already ready.
 async function runUpdate<T>(operation: () => Promise<T>): Promise<T> {
-  if (updating || updateReady) throw new Error("更新正在进行或等待安装，暂时不能执行此操作");
+  if (updating || updateReady)
+    throw new Error("更新正在进行或等待安装，暂时不能执行此操作");
   updating = true;
   send(updateWindow, lastStatus);
   try {
@@ -107,12 +111,15 @@ function tryWindowsNightInstall(getWindow: GetWindow): void {
     scheduleWindowsNightInstall(getWindow);
     return;
   }
-  if (hasInflightCrawlTasks()) {
+  if (hasActiveCrawlTasks()) {
     send(getWindow, {
       kind: "downloaded",
       message: "更新已下载，当前有抓取任务，空闲后再重启安装",
     });
-    nightInstallTimer = setTimeout(() => tryWindowsNightInstall(getWindow), BUSY_RETRY_MS);
+    nightInstallTimer = setTimeout(
+      () => tryWindowsNightInstall(getWindow),
+      BUSY_RETRY_MS,
+    );
     return;
   }
   nightInstallStarted = true;
@@ -124,7 +131,10 @@ function tryWindowsNightInstall(getWindow: GetWindow): void {
 
 function send(getWindow: GetWindow, event: UpdateStatusEvent): void {
   lastStatus = event;
-  getWindow()?.webContents.send("update:event:status", { ...event, busy: updating || updateReady });
+  getWindow()?.webContents.send("update:event:status", {
+    ...event,
+    busy: updating || updateReady,
+  });
 }
 
 export function setupAutoUpdater(getWindow: GetWindow): void {
@@ -194,7 +204,8 @@ export function setupAutoUpdater(getWindow: GetWindow): void {
       cancelId: 1,
       title: "更新已就绪",
       message: `新版本 ${info.version} 已下载完成`,
-      detail: "未签名的 macOS 包可能无法静默替换，若失败请手动下载 Release 安装。",
+      detail:
+        "未签名的 macOS 包可能无法静默替换，若失败请手动下载 Release 安装。",
     };
     const result = win
       ? await dialog.showMessageBox(win, boxOpts)
@@ -270,7 +281,11 @@ export async function downloadAppUpdate(): Promise<
   }
 }
 
-export function getUpdateMeta(): { version: string; packaged: boolean; busy: boolean } {
+export function getUpdateMeta(): {
+  version: string;
+  packaged: boolean;
+  busy: boolean;
+} {
   return {
     version: app.getVersion(),
     packaged: app.isPackaged,

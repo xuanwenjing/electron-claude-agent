@@ -1,9 +1,6 @@
-export type NoteDto = {
-  id: number;
-  content: string;
-  createdAt: string;
-};
-
+import type { CrawlResult } from "../../shared/crawl";
+import type { RequestLogsApi } from "../../shared/requestLogs";
+import type { AuthApi } from "../../shared/auth";
 export type UpdateStatusEvent = {
   kind:
     | "checking"
@@ -17,29 +14,6 @@ export type UpdateStatusEvent = {
   version?: string;
   percent?: number;
   busy?: boolean;
-};
-
-export type CrawlResultRow = {
-  id: number;
-  taskId: string;
-  ok: boolean;
-  payload: string;
-  payloadBytes: number;
-  truncated: boolean;
-  error: string | null;
-  createdAt: string;
-};
-
-export type CrawlResultEvent = {
-  taskId: string;
-  ok: boolean;
-  data?: unknown;
-  error?: string | null;
-  /** 见 src/shared/bridgeProtocol TaskErrorCode */
-  errorCode?: string | null;
-  saved?: unknown;
-  /** 客户端直接下发的任务：workspace/crawl/<taskId>/result.json 绝对路径 */
-  resultPath?: string | null;
 };
 
 export type LogKind = "log" | "assistant" | "tool" | "result" | "error";
@@ -60,7 +34,10 @@ export type RequestConfig = {
   timeout?: number;
 };
 
-type ExtraRequestConfig = Omit<RequestConfig, "url" | "method" | "params" | "data">;
+type ExtraRequestConfig = Omit<
+  RequestConfig,
+  "url" | "method" | "params" | "data"
+>;
 
 /** 主进程 Request 的返回体；失败时为 { code: HTTP 状态 | axios 错误码 | -1, msg, data } */
 export type ApiResponse<T = any> = {
@@ -73,53 +50,72 @@ export type ApiResponse<T = any> = {
 
 declare global {
   interface Window {
+    requestLogsApi: RequestLogsApi;
+    authApi: AuthApi;
     /** 经 IPC 由主进程 utils/request 发出，无 CSP / CORS 限制 */
     requestApi: {
       request: <T = any>(config: RequestConfig) => Promise<ApiResponse<T>>;
-      get: <T = any>(url: string, params?: Record<string, unknown>, config?: ExtraRequestConfig) => Promise<ApiResponse<T>>;
-      post: <T = any>(url: string, data?: unknown, config?: ExtraRequestConfig) => Promise<ApiResponse<T>>;
-      put: <T = any>(url: string, data?: unknown, config?: ExtraRequestConfig) => Promise<ApiResponse<T>>;
-      delete: <T = any>(url: string, params?: Record<string, unknown>, config?: ExtraRequestConfig) => Promise<ApiResponse<T>>;
-    };
-    dbApi: {
-      info: () => Promise<
-        { ok: true; path: string; count: number } | { ok: false; error: string }
-      >;
-      listNotes: () => Promise<{ ok: true; notes: NoteDto[] } | { ok: false; error: string }>;
-      addNote: (
-        content: string,
-      ) => Promise<{ ok: true; note: NoteDto } | { ok: false; error: string }>;
-      deleteNote: (id: number) => Promise<{ ok: true } | { ok: false; error: string }>;
-      clearNotes: () => Promise<{ ok: true; deleted: number } | { ok: false; error: string }>;
+      get: <T = any>(
+        url: string,
+        params?: Record<string, unknown>,
+        config?: ExtraRequestConfig,
+      ) => Promise<ApiResponse<T>>;
+      post: <T = any>(
+        url: string,
+        data?: unknown,
+        config?: ExtraRequestConfig,
+      ) => Promise<ApiResponse<T>>;
+      put: <T = any>(
+        url: string,
+        data?: unknown,
+        config?: ExtraRequestConfig,
+      ) => Promise<ApiResponse<T>>;
+      delete: <T = any>(
+        url: string,
+        params?: Record<string, unknown>,
+        config?: ExtraRequestConfig,
+      ) => Promise<ApiResponse<T>>;
     };
     crawlApi: {
-      getStatus: () => Promise<{ connected: boolean; port: number; extensionDir: string }>;
-      revealExtensionDir: () => Promise<{ ok: true } | { ok: false; error: string }>;
-      start: (
-        config: unknown,
-      ) => Promise<
-        | { ok: true; taskId: string }
-        | { ok: false; error: string; taskId?: string; resultPath?: string | null }
+      getStatus: () => Promise<{
+        connected: boolean;
+        port: number;
+        extensionDir: string;
+      }>;
+      revealExtensionDir: () => Promise<
+        { ok: true } | { ok: false; error: string }
       >;
+      start: (config: unknown, taskId?: string) => Promise<CrawlResult>;
+      cancel: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
       reloadExtension: () => Promise<
         { ok: true; taskId: string } | { ok: false; error: string }
       >;
-      openXiaohongshu: () => Promise<{ ok: true } | { ok: false; error: string }>;
-      listResults: () => Promise<
-        { ok: true; rows: CrawlResultRow[] } | { ok: false; error: string }
-      >;
-      onStatus: (handler: (data: { connected: boolean; port: number }) => void) => () => void;
-      onProgress: (handler: (data: { taskId: string; message: string }) => void) => () => void;
-      onResult: (handler: (data: CrawlResultEvent) => void) => () => void;
+      onStatus: (
+        handler: (data: { connected: boolean; port: number }) => void,
+      ) => () => void;
+      onProgress: (
+        handler: (data: { taskId: string; message: string }) => void,
+      ) => () => void;
     };
     updateApi: {
-      meta: () => Promise<{ version: string; packaged: boolean; busy: boolean }>;
-      getOpenAtLogin: () => Promise<{ supported: boolean; openAtLogin: boolean }>;
+      meta: () => Promise<{
+        version: string;
+        packaged: boolean;
+        busy: boolean;
+      }>;
+      getOpenAtLogin: () => Promise<{
+        supported: boolean;
+        openAtLogin: boolean;
+      }>;
       setOpenAtLogin: (
         enabled: boolean,
       ) => Promise<{ supported: boolean; openAtLogin: boolean }>;
-      check: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
-      download: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>;
+      check: () => Promise<
+        { ok: true; message: string } | { ok: false; error: string }
+      >;
+      download: () => Promise<
+        { ok: true; message: string } | { ok: false; error: string }
+      >;
       onStatus: (handler: (event: UpdateStatusEvent) => void) => () => void;
     };
   }
