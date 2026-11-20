@@ -1,5 +1,7 @@
 import { ipcMain } from "electron";
 import { authSession } from "../auth";
+import { syncPushChannel } from "../push";
+import { syncClientTasks } from "../tasks";
 import { sendToRenderer } from "../window";
 import { cancelAllClientCrawls, hasActiveClientCrawls } from "./crawl";
 import { toErrorMessage } from "./errors";
@@ -9,7 +11,11 @@ export function registerAuthIpc(): void {
     hasActive: hasActiveClientCrawls,
     cancel: cancelAllClientCrawls,
   });
-  authSession.onChange = (state) => sendToRenderer("auth:event:session", state);
+  authSession.onChange = (state) => {
+    sendToRenderer("auth:event:session", state);
+    syncPushChannel();
+    syncClientTasks();
+  };
   const protect = async (action: () => unknown) => {
     try {
       return await action();

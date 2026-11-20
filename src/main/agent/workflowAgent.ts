@@ -6,6 +6,8 @@ import { ensureWorkspaceDir } from "../utils/paths";
 import { runAgent } from "./runAgent";
 import { installSkills } from "./skillPackage";
 
+export { loadBotRuntime } from "./botPackage";
+
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const LOG_MAX = 300;
 const RUNS_DIR = "agent-runs";

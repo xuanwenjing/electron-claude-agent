@@ -20,7 +20,7 @@ export function setRequestContextProvider(
 }
 
 export const defaultSettings = {
-  source: "electron-client",
+  Source: "omnivista-reply",
 };
 
 export class Request {
@@ -28,7 +28,7 @@ export class Request {
 
   constructor(options: AxiosRequestConfig = {}) {
     this.service = axios.create({
-      baseURL: process.env.CLIENT_API_BASE_URL || "http://localhost:3000",
+      baseURL: process.env.CLIENT_API_BASE_URL!,
       ...options,
       timeout: 120000,
     });
@@ -48,14 +48,14 @@ export class Request {
     // 公共身份信息以主进程会话为准，不允许调用方通过 headers 覆盖。
     for (const key of Object.keys(headers)) {
       if (
-        ["authorization", "outlet-code", "outlet_code"].includes(
+        ["authorization", "outletcode", "outlet-code", "outlet_code"].includes(
           key.toLowerCase(),
         )
       )
         delete headers[key];
     }
     if (context.token) headers.Authorization = `Bearer ${context.token}`;
-    if (context.outletCode) headers.outlet_code = context.outletCode;
+    if (context.outletCode) headers["Outlet-Code"] = context.outletCode;
     return headers;
   }
 
@@ -63,7 +63,7 @@ export class Request {
     // 请求拦截器
     this.service.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
-        config.headers["X-Client-Version"] = app.getVersion();
+        config.headers["Client-Version"] = app.getVersion();
         return config;
       },
       (error) => Promise.reject(error),
@@ -105,14 +105,22 @@ export class Request {
     const started = Date.now();
     let logId: number | undefined;
     try {
+      const baseURL =
+        (typeof config.baseURL === "string" && config.baseURL.trim()) ||
+        process.env.CLIENT_API_BASE_URL?.trim();
       const requestConfig = {
-        baseURL: process.env.CLIENT_API_BASE_URL || "http://localhost:3000",
         ...config,
+        baseURL,
         headers: this.getRequestHeaders(
           config.headers || {},
           context ?? getContext(),
         ),
       };
+      if (typeof FormData !== "undefined" && requestConfig.data instanceof FormData) {
+        const headers = requestConfig.headers as Record<string, unknown>;
+        delete headers["Content-Type"];
+        delete headers["content-type"];
+      }
       logId = requestLogs.begin(requestConfig);
       const response = await this.service(requestConfig);
       const code = response.data?.code;

@@ -33,7 +33,7 @@ export function OutletSwitcher() {
   };
   return (
     <>
-      <div className="space-y-2 border-y p-3">
+      <div className="space-y-1.5 border-b px-4 py-3">
         <p className="truncate text-sm" title={user?.name}>
           {user?.name || user?.mobile}
         </p>
@@ -62,7 +62,7 @@ export function OutletSwitcher() {
             aria-modal="true"
             aria-labelledby="logout-title"
             aria-describedby="logout-description"
-            className="w-full max-w-md space-y-4 rounded-lg border bg-background p-6 shadow-lg"
+            className="w-full max-w-md space-y-4 rounded-sm border bg-card p-6"
           >
             <h2 id="logout-title" className="text-lg font-semibold">
               确认退出登录

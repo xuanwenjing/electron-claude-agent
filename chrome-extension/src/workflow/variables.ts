@@ -123,6 +123,18 @@ export function validateStepVariables(workflowItem: WorkflowItem): void {
     throw new Error("run_agent_params.save_as 已不再支持：改为步骤上的 save_as");
   }
   const { type } = workflowItem;
+  if (type === "run_agent") {
+    const params = workflowItem.run_agent_params;
+    if (params?.prompt == null || params.prompt === "") {
+      throw new Error("run_agent 需要 run_agent_params.prompt");
+    }
+    if ("bot_code" in params) {
+      throw new Error("run_agent_params.bot_code 须由客户端在下发前展开为 prompt、模型和 Skill");
+    }
+    if (params.skills !== undefined && !Array.isArray(params.skills)) {
+      throw new Error("run_agent_params.skills 必须是数组");
+    }
+  }
   for (const field of ["list", "item_var", "index_var"] as const) {
     if (workflowItem[field] !== undefined && type !== "loop" && type !== "run_agent") {
       throw new Error(`${field} 只能用于 loop / run_agent，当前步骤是 ${type}`);

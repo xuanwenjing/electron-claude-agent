@@ -53,7 +53,7 @@ function fixture({ stores = outlets, failProfile = false } = {}) {
   const session = new AuthSession(async (url, data, token) => {
     calls.push({ url, data, token });
     if (url.endsWith("loginByCode")) {
-      if (data.sms_code !== "123456") throw Error("验证码错误");
+      if (data.sms_code !== "1234") throw Error("验证码错误");
       return { access_token: "secret", expire_at: 7200 };
     }
     if (url.endsWith("/me")) {
@@ -80,14 +80,14 @@ function fixture({ stores = outlets, failProfile = false } = {}) {
 test("SMS login enters the only outlet and waits when there are several", async () => {
   const one = fixture({ stores: [outlets[0]] });
   await one.session.sendSms("13800138000");
-  const entered = await one.session.login("13800138000", "123456");
+  const entered = await one.session.login("13800138000", "1234");
   assert.equal(entered.outlet.outlet_code, "a");
   assert.equal(entered.access_token, undefined);
   assert.equal(one.session.getRequestContext().outletCode, "a");
   assert.equal(one.calls[0].data.area_code, "86");
 
   const many = fixture();
-  const waiting = await many.session.login("13800138000", "123456");
+  const waiting = await many.session.login("13800138000", "1234");
   assert.equal(waiting.outlet, null);
   assert.equal(many.session.getRequestContext().token, "secret");
   assert.equal(many.session.getRequestContext().outletCode, undefined);
@@ -99,13 +99,13 @@ test("SMS login enters the only outlet and waits when there are several", async 
 test("invalid login or failed profile request never establishes a session", async () => {
   const f = fixture();
   await assert.rejects(
-    () => f.session.login("13800138000", "111111"),
+    () => f.session.login("13800138000", "1111"),
     /验证码错误/,
   );
   assert.equal(f.session.getState().user, null);
   const bad = fixture({ failProfile: true });
   await assert.rejects(
-    () => bad.session.login("13800138000", "123456"),
+    () => bad.session.login("13800138000", "1234"),
     /profile failed/,
   );
   await assert.rejects(() => bad.session.refresh(), /请先登录/);
@@ -116,7 +116,7 @@ test("account without outlets cannot login or retain credentials, and can retry 
   let changes = 0;
   f.session.onChange = () => changes++;
   await assert.rejects(
-    () => f.session.login("13800138000", "123456"),
+    () => f.session.login("13800138000", "1234"),
     /没有可用门店/,
   );
   assert.equal(f.session.getState().user, null);
@@ -125,12 +125,12 @@ test("account without outlets cannot login or retain credentials, and can retry 
   assert.equal(changes, 0);
   await assert.rejects(() => f.session.refresh(), /请先登录/);
   stores.push(outlets[0]);
-  await f.session.login("13800138000", "123456");
+  await f.session.login("13800138000", "1234");
   assert.equal(f.session.getState().outlet.outlet_code, "a");
 });
 test("expiry cancels tasks and clears both token and outlet", async () => {
   const f = fixture();
-  await f.session.login("13800138000", "123456");
+  await f.session.login("13800138000", "1234");
   f.setActive(true);
   now += 7200001;
   assert.equal(f.session.getState().user, null);
@@ -142,7 +142,7 @@ test("expiry cancels tasks and clears both token and outlet", async () => {
 });
 test("logout with active tasks respects confirmation", async () => {
   const f = fixture();
-  await f.session.login("13800138000", "123456");
+  await f.session.login("13800138000", "1234");
   f.setActive(true);
   assert.equal((await f.session.logout(false)).confirmationRequired, true);
   assert.equal(f.cancels(), 0);
@@ -154,7 +154,7 @@ test("logout with active tasks respects confirmation", async () => {
 test("profile refresh preserves selected outlet and normalizes platform bindings", async () => {
   const stores = JSON.parse(JSON.stringify(outlets));
   const f = fixture({ stores });
-  await f.session.login("13800138000", "123456");
+  await f.session.login("13800138000", "1234");
   f.session.chooseOutlet("b");
   stores[1].external_outlets.push({
     group: "MeiTuan",
@@ -207,7 +207,7 @@ function persistedFixture(initial, stores = outlets) {
 test("login persists absolute expiry; confirmed outlet survives a new session and logout removes it", async () => {
   const f = persistedFixture(null);
   const first = f.make();
-  await first.login("13800138000", "123456");
+  await first.login("13800138000", "1234");
   assert.equal(f.saved(), null);
   first.chooseOutlet("b");
   const expiry = f.saved().expiresAt;

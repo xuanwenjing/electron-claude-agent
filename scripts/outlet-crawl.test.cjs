@@ -34,7 +34,7 @@ test("crawl IPC returns final results directly, retries once and cancels pending
   let server, connected, restarted;
   const handlers = {},
     sent = [],
-    written = [],
+    reports = [],
     events = [];
   class Server extends EventEmitter {
     constructor() {
@@ -78,17 +78,79 @@ test("crawl IPC returns final results directly, retries once and cancels pending
         }),
     },
     "../update/extensionUpdater": { flushPendingExtensionReload() {} },
-    "../crawl/resultFile": {
-      writeCrawlResultFile: (row) => {
-        written.push(row);
-        return "/tmp/result.json";
-      },
-    },
     "../window": { sendToRenderer: (...args) => events.push(args) },
     "../auth": { authSession: { getState: () => ({ outlet: null }) } },
+    "../../shared/merchant": {
+      HotelPlatform: {
+        CtripEbk: "CtripEbk",
+        CtripHotel: "CtripHotel",
+        Meituan: "MeiTuan",
+        Douyin: "DouYin",
+        Fliggy: "Fliggy",
+      },
+      normalizePlatform: (value) => {
+        switch (String(value).toLowerCase()) {
+          case "ctrip":
+          case "ctripebk":
+            return "CtripEbk";
+          case "ctriphotel":
+            return "CtripHotel";
+          case "meituan":
+            return "MeiTuan";
+          case "fliggy":
+            return "Fliggy";
+          case "douyin":
+            return "DouYin";
+          default:
+            return value;
+        }
+      },
+      PLATFORM_LABELS: {
+        CtripEbk: "携程EBK",
+        CtripHotel: "携程酒店",
+        MeiTuan: "美团",
+        DouYin: "抖音",
+        Fliggy: "飞猪",
+      },
+    },
   });
   api.registerCrawlIpc();
   api.startCrawlBridge();
+  const unbound = await api.startCrawl(
+    { platform: "MeiTuan", workflow: [] },
+    "binding-check",
+    { checkBinding: true },
+  );
+  assert.equal(unbound.ok, false);
+  assert.equal(unbound.errorCode, protocol.TaskErrorCode.OutletMismatch);
+  assert.match(unbound.error, /账号未绑定美团门店/);
+  assert.equal(unbound.report.ok, false);
+  assert.equal(unbound.report.errorCode, protocol.TaskErrorCode.OutletMismatch);
+  assert.match(unbound.report.error, /账号未绑定美团门店/);
+  assert.equal(unbound.report.clientTaskCode, undefined);
+  const typed = await api.startCrawl(
+    { platform: "MeiTuan", workflow: [] },
+    "inst_001",
+    {
+      checkBinding: true,
+      businessType: "REVIEW_REPLY",
+      clientTaskCode: "task_review_001",
+    },
+  );
+  assert.equal(typed.taskId, "inst_001");
+  assert.equal(typed.report.taskId, "inst_001");
+  assert.equal(typed.report.clientTaskCode, "task_review_001");
+  assert.equal(typed.report.instanceCode, undefined);
+  assert.equal(typed.report.businessType, "REVIEW_REPLY");
+  assert.equal(tasks.crawlTasks.list().length, 0);
+  assert.equal(
+    api.scheduledOutletError("meituan", [{ group: "MeiTuan", code: "hotel-1" }]),
+    null,
+  );
+  assert.match(
+    api.scheduledOutletError("CtripHotel", [{ group: "CtripEbk", code: "445011" }]),
+    /账号未绑定携程酒店门店/,
+  );
   const socket = new EventEmitter();
   socket.OPEN = 1;
   socket.readyState = 1;
@@ -101,20 +163,24 @@ test("crawl IPC returns final results directly, retries once and cancels pending
   const suppliedId = "12345678-1234-4234-8234-123456789abc";
   let pending = handlers["crawl:start"]({}, config, suppliedId);
   assert.equal(tasks.crawlTasks.list()[0].taskId, suppliedId);
-  assert.equal(
-    (await handlers["crawl:start"]({}, config, suppliedId)).ok,
-    false,
-  );
+  const duplicate = await handlers["crawl:start"]({}, config, suppliedId);
+  assert.equal(duplicate.ok, false);
+  assert.equal(duplicate.error, "任务已存在");
+  assert.equal(duplicate.report.ok, false);
+  assert.equal(duplicate.report.error, "任务已存在");
+  assert.equal(duplicate.report.errorCode, protocol.TaskErrorCode.InvalidTask);
   assert.equal((await handlers["crawl:cancel"]({}, "")).ok, true);
   await tick();
   assert.equal(handlers["crawl:cancel"]({}, suppliedId).ok, true);
-  assert.equal((await pending).errorCode, protocol.TaskErrorCode.Cancelled);
+  const cancelled = await pending;
+  assert.equal(cancelled.errorCode, protocol.TaskErrorCode.Cancelled);
   connected({ ok: true });
   await tick();
   assert.equal(sent.filter((x) => x.type === "start_task").length, 0);
-  assert.equal(written[0].config, config);
+  reports.push(cancelled.report);
+  assert.equal(cancelled.report.config, config);
 
-  pending = handlers["crawl:start"]({}, config);
+  pending = handlers["crawl:start"]({}, config, "run-1");
   await tick();
   connected({ ok: true });
   await tick();
@@ -133,9 +199,11 @@ test("crawl IPC returns final results directly, retries once and cancels pending
   });
   let result = await pending;
   assert.equal(result.data.hotel, "one");
-  assert.equal(result.resultPath, "/tmp/result.json");
+  assert.equal(result.report.data.hotel, "one");
+  assert.equal(result.report.config, config);
+  reports.push(result.report);
 
-  pending = handlers["crawl:start"]({}, config);
+  pending = handlers["crawl:start"]({}, config, "run-2");
   await tick();
   connected({ ok: true });
   await tick();
@@ -150,13 +218,15 @@ test("crawl IPC returns final results directly, retries once and cancels pending
   await tick();
   assert.ok(tasks.crawlTasks.hasActive());
   api.cancelAllClientCrawls("cancel retry");
-  assert.equal((await pending).errorCode, protocol.TaskErrorCode.Cancelled);
+  const retried = await pending;
+  assert.equal(retried.errorCode, protocol.TaskErrorCode.Cancelled);
+  reports.push(retried.report);
   const count = sent.length;
   restarted({ ok: true });
   await tick();
   assert.equal(sent.length, count);
 
-  pending = handlers["crawl:start"]({}, config);
+  pending = handlers["crawl:start"]({}, config, "run-3");
   await tick();
   connected({ ok: true });
   await tick();
@@ -176,12 +246,21 @@ test("crawl IPC returns final results directly, retries once and cancels pending
   result = await pending;
   assert.equal(result.errorCode, protocol.TaskErrorCode.SiteBlocked);
   assert.equal(tasks.crawlTasks.hasActive(), false);
-  assert.equal(written.length, 4);
+  reports.push(result.report);
+  assert.equal(reports.length, 4);
   assert.equal(
     events.some(([name]) => name === "crawl:event:result"),
     false,
   );
-  assert.equal((await handlers["crawl:start"]({}, null)).ok, false);
+  const badConfig = await handlers["crawl:start"]({}, null, "run-4");
+  assert.equal(badConfig.ok, false);
+  assert.equal(badConfig.report.error, "抓取配置必须为对象");
+  const missingId = await handlers["crawl:start"]({}, config, "");
+  assert.equal(missingId.ok, false);
+  assert.equal(missingId.report.error, "任务编号不能为空");
+  const absentId = await handlers["crawl:start"]({}, config);
+  assert.equal(absentId.ok, false);
+  assert.equal(absentId.report.error, "任务编号不能为空");
   const custom = handlers["crawl:start"]({}, config, "../bad-id");
   await tick();
   connected({ ok: true });
@@ -360,44 +439,28 @@ test("crawl execution state has no merchant or authentication fields", () => {
   );
 });
 
-test("renderer awaits final IPC result without a result-event subscription", async () => {
-  let complete;
-  const outlet = { outlet_code: "a" };
+test("renderer keeps extension status and does not dispatch crawl tasks", async () => {
   const api = {
     onStatus: () => () => {},
-    onProgress: () => () => {},
+    onProgress: (listener) => {
+      listener({ taskId: "task-12345678", message: "步骤完成" });
+      return () => {};
+    },
     getStatus: async () => ({
       connected: true,
       port: 19283,
       extensionDir: "/tmp/ext",
     }),
-    start: () =>
-      new Promise((resolve) => {
-        complete = resolve;
-      }),
   };
   const { useCrawlStore } = load(
     "src/renderer/stores/useCrawlStore.ts",
-    {
-      "./useAuthStore": { useAuthStore: { getState: () => ({ outlet }) } },
-      "../../shared/bridgeProtocol": protocol,
-      "../sampleConfig": { SAMPLE_CRAWL_CONFIG: { workflow: [] } },
-    },
+    { "../../shared/bridgeProtocol": protocol },
     { window: { crawlApi: api } },
   );
   useCrawlStore.getState().init();
-  let pending = useCrawlStore.getState().start();
-  assert.equal(useCrawlStore.getState().starting, true);
-  complete({ ok: true, taskId: "task-123456", resultPath: "/tmp/result.json" });
-  await pending;
-  assert.equal(useCrawlStore.getState().starting, false);
-  assert.ok(useCrawlStore.getState().logs.at(-1).text.includes("抓取完成"));
-  assert.ok(
-    useCrawlStore.getState().logs.at(-1).text.includes("/tmp/result.json"),
-  );
-  pending = useCrawlStore.getState().start();
-  complete({ ok: false, taskId: "task-failure", error: "failed" });
-  await pending;
-  assert.equal(useCrawlStore.getState().logs.at(-1).kind, "error");
-  assert.equal(useCrawlStore.getState().starting, false);
+  assert.equal(useCrawlStore.getState().start, undefined);
+  await Promise.resolve();
+  assert.equal(useCrawlStore.getState().connected, true);
+  assert.equal(useCrawlStore.getState().extensionDir, "/tmp/ext");
+  assert.match(useCrawlStore.getState().logs.at(-1).text, /步骤完成/);
 });

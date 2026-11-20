@@ -1,3 +1,4 @@
+import { toCurl } from "../../shared/curl";
 import type { RequestLog } from "../../shared/requestLogs";
 
 export function formatLogValue(value: unknown): string {
@@ -24,11 +25,10 @@ export function formatLogValue(value: unknown): string {
 }
 
 function requestUrl(url: string, baseURL?: string): string {
-  try {
-    return new URL(url, baseURL).toString();
-  } catch {
-    return url;
-  }
+  if (/^[a-z][a-z\d+.-]*:/i.test(url)) return url;
+  const base = baseURL?.trim();
+  if (!base) return url;
+  return `${base.replace(/\/+$/, "")}/${url.replace(/^\/+/, "")}`;
 }
 
 export class RequestLogStore {
@@ -43,15 +43,24 @@ export class RequestLogStore {
     headers?: unknown;
   }): number {
     const id = ++this.nextId;
+    const method = (config.method || "GET").toUpperCase();
+    const url = requestUrl(config.url || "", config.baseURL);
     this.entries.push({
       id,
       startedAt: new Date().toISOString(),
-      method: (config.method || "GET").toUpperCase(),
-      url: requestUrl(config.url || "", config.baseURL),
+      method,
+      url,
       request: formatLogValue({
         params: config.params,
         body: config.data,
         headers: config.headers,
+      }),
+      curl: toCurl({
+        method,
+        url,
+        headers: config.headers,
+        params: config.params,
+        body: config.data,
       }),
       state: "pending",
     });
@@ -71,7 +80,8 @@ export class RequestLogStore {
     if (entry)
       Object.assign(entry, {
         status: result.status,
-        response: formatLogValue(result.body),
+        response:
+          typeof result.body === "string" ? result.body : formatLogValue(result.body),
         durationMs: result.durationMs,
         state: result.failed ? "error" : "success",
       });

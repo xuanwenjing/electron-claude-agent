@@ -48,9 +48,15 @@ function parseJsonOutput(text: string): unknown {
 type RunCtx = { taskId?: string; token?: CancelToken | null };
 
 function buildRequest(params: RunAgentStepParam, vars: Record<string, unknown>): RunAgentParams {
-  const skills = (params.skills ?? []).map((s) => ({ url: renderPrompt(vars, s?.url), version: String(s?.version ?? "") }));
+  const prompt = renderPrompt(vars, params.prompt);
+  if (!prompt.trim()) throw new Error("run_agent 提示词为空");
+  const skills = (params.skills ?? []).map((skill) => ({
+    url: renderPrompt(vars, skill?.url),
+    version: String(skill?.version ?? ""),
+    ...(skill?.sha256 ? { sha256: String(skill.sha256) } : {}),
+  }));
   return {
-    prompt: renderPrompt(vars, params.prompt),
+    prompt,
     systemPrompt: params.system_prompt ? renderPrompt(vars, params.system_prompt) : undefined,
     model: params.model || undefined,
     skills: skills.length ? skills : undefined,
@@ -157,20 +163,13 @@ export async function handleRunAgent(
   ctx: RunCtx,
 ): Promise<unknown> {
   const params = workflowItem.run_agent_params;
-  if (!params || params.prompt == null || params.prompt === "") {
-    throw new Error("run_agent 需要 run_agent_params.prompt");
-  }
-  if ("skill_url" in params) throw new Error("run_agent_params.skill_url 已不再支持：改用 skills: [{url, version}]");
-  if (params.skills !== undefined && !Array.isArray(params.skills)) {
-    throw new Error("run_agent_params.skills 必须是数组 [{url, version}]");
-  }
+  if (params?.prompt == null || params.prompt === "") throw new Error("run_agent 需要 run_agent_params.prompt");
   if (!runner) throw new Error("run_agent 未就绪：客户端通道未初始化");
 
-  const skills = params.skills ?? [];
   emit(
     `run_agent 开始` +
       `${params.model ? `，模型 ${params.model}` : ""}` +
-      `${skills.length ? `，Skill ${skills.map((s) => `${s?.url}@${s?.version}`).join(", ")}` : ""}`,
+      `${params.skills?.length ? `，Skill ${params.skills.length} 个` : ""}`,
   );
   if (workflowItem.list !== undefined) return runBatch(collector, workflowItem, params, emit, ctx);
 

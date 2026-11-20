@@ -1,12 +1,17 @@
 import { app } from "electron";
 
+import { installConsoleCapture } from "./diagnostics/consoleLogs";
 import { killAllPython } from "./agent/pythonMcp";
 import { stopBridgeServer } from "./crawl/bridgeServer";
+import { stopPushChannel } from "./push";
+import { stopClientTasks } from "./tasks";
 import { loadEnvFiles, loadUserDataEnv } from "./utils/env";
 import { registerIpcHandlers, startCrawlBridge } from "./ipc";
 import { startUpdaters } from "./update";
 import { applyOpenAtLogin, launchedAtLogin } from "./window/autoLaunch";
 import { createMainWindow, showMainWindow } from "./window";
+
+installConsoleCapture();
 
 // Acquire the lock before initializing the bridge port or updaters.
 if (!app.requestSingleInstanceLock()) {
@@ -43,5 +48,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("before-quit", () => {
     killAllPython();
     stopBridgeServer();
+    stopPushChannel();
+    stopClientTasks();
   });
 }

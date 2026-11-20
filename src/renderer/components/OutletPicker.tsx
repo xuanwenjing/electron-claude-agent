@@ -42,7 +42,7 @@ export function OutletPicker() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="outlet-picker-title"
-        className="w-full max-w-md space-y-4 rounded-lg border bg-card p-6 shadow-lg"
+        className="w-full max-w-md space-y-4 rounded-sm border bg-card p-6"
       >
         <div>
           <h1 id="outlet-picker-title" className="text-xl font-semibold">
@@ -57,7 +57,7 @@ export function OutletPicker() {
           {outlets.map((item) => (
             <label
               key={item.outlet_code}
-              className="flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm has-[:checked]:border-primary"
+              className="flex cursor-pointer items-center gap-3 rounded-sm border bg-card p-3 text-sm has-[:checked]:bg-accent"
             >
               <input
                 type="radio"
@@ -71,7 +71,7 @@ export function OutletPicker() {
           ))}
         </div>
         {error && (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         )}

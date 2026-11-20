@@ -56,7 +56,7 @@ function failInflightTasks(reason: string): void {
   }
 }
 
-/** run_agent 的模型过程日志记进所属任务（界面日志 / result.json） */
+/** run_agent 的模型过程日志记进所属任务，随结果一起上报。 */
 function emitTaskProgress(taskId: string | undefined, message: string): void {
   if (!taskId) return;
   onProgress?.(taskId, message);

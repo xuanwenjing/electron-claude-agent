@@ -1,15 +1,12 @@
 import { OutletSwitcher } from "@/components/OutletSwitcher";
-import { Bug, Download, Store } from "lucide-react";
+import { Download, Store } from "lucide-react";
 import type { ReactNode } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useCrawlStore } from "@/stores/useCrawlStore";
 import { type PanelId, useUiStore } from "@/stores/useUiStore";
 
-const navItems: Array<{ id: PanelId; label: string; icon: typeof Bug }> = [
-  { id: "crawl", label: "抓取", icon: Bug },
+const navItems: Array<{ id: PanelId; label: string; icon: typeof Store }> = [
   { id: "merchants", label: "商家连接", icon: Store },
   { id: "update", label: "更新", icon: Download },
 ];
@@ -21,26 +18,25 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-full min-h-0">
-      <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
-        <div className="px-4 py-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Electron
-          </p>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight">
-            Claude Agent
-          </h1>
+      <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+        <div className="flex items-center gap-3 border-b px-4 py-4">
+          <span className="grid h-8 w-8 place-items-center bg-primary text-xs font-semibold text-primary-foreground">
+            店
+          </span>
+          <div>
+            <p className="text-xs text-muted-foreground">门店工作台</p>
+            <h1 className="text-base font-semibold tracking-tight">回评客户端</h1>
+          </div>
         </div>
         <OutletSwitcher />
-        <Separator />
-        <nav className="flex flex-1 flex-col gap-1 p-2">
+        <nav className="flex flex-1 flex-col gap-1 px-3 py-3">
           {navItems.map(({ id, label, icon: Icon }) => (
             <Button
               key={id}
               variant="ghost"
               className={cn(
-                "justify-start gap-2",
-                currentPanel === id &&
-                  "bg-sidebar-accent text-accent-foreground",
+                "justify-start gap-2 rounded-sm",
+                currentPanel === id && "bg-sidebar-accent text-foreground",
               )}
               onClick={() => setPanel(id)}
             >
@@ -49,13 +45,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
           ))}
         </nav>
-        <div className="p-3">
-          <Badge
-            variant={connected ? "success" : "secondary"}
-            className="w-full justify-center"
-          >
-            扩展 {connected ? "已连接" : "未连接"}
-          </Badge>
+        <div className="flex items-center gap-2 border-t px-4 py-3 text-xs text-muted-foreground">
+          <span
+            className={cn(
+              "h-1.5 w-1.5",
+              connected ? "bg-success" : "bg-border",
+            )}
+          />
+          扩展 {connected ? "已连接" : "未连接"}
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-auto p-6">{children}</main>

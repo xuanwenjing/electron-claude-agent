@@ -18,7 +18,32 @@ function load() {
       },
     },
   ).outputText;
-  vm.runInNewContext(logSource, { exports: logExports, URL });
+  vm.runInNewContext(logSource, {
+    exports: logExports,
+    URL,
+    URLSearchParams,
+    FormData,
+    Blob,
+    require: (name) => {
+      if (!name.startsWith(".")) return require(name);
+      const target = path.resolve(
+        path.dirname(path.join(__dirname, "../src/main/diagnostics/requestLogs.ts")),
+        name,
+      );
+      const filePath = fs.existsSync(target) ? target : `${target}.ts`;
+      const nested = {};
+      vm.runInNewContext(
+        ts.transpileModule(fs.readFileSync(filePath, "utf8"), {
+          compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2022,
+          },
+        }).outputText,
+        { exports: nested, URL, URLSearchParams, FormData, Blob },
+      );
+      return nested;
+    },
+  });
   const exports = {};
   const code = ts.transpileModule(
     fs.readFileSync(
@@ -36,6 +61,8 @@ function load() {
   vm.runInNewContext(code, {
     exports,
     process,
+    FormData,
+    Blob,
     console: { error() {} },
     require: (name) =>
       name === "electron"
@@ -69,6 +96,7 @@ test("shared requests read current credentials and outlet on every call, clearin
         Authorization: "spoof",
         "outlet-code": "old",
         outlet_code: "spoof",
+        OutletCode: "spoof",
       },
     });
   assert.equal((await send()).code, 200);
@@ -76,26 +104,39 @@ test("shared requests read current credentials and outlet on every call, clearin
   context = { token: "first", outletCode: "a" };
   await send();
   assert.equal(seen[1].headers.Authorization, "Bearer first");
-  assert.equal(seen[1].headers.outlet_code, "a");
-  assert.equal(seen[1].headers["outlet-code"], undefined);
+  assert.equal(seen[1].headers["Outlet-Code"], "a");
+  assert.equal(seen[1].headers.OutletCode, undefined);
+  assert.equal(seen[1].headers.outlet_code, undefined);
   context = { token: "second", outletCode: "b" };
   await send();
   assert.equal(seen[2].headers.Authorization, "Bearer second");
-  assert.equal(seen[2].headers.outlet_code, "b");
+  assert.equal(seen[2].headers["Outlet-Code"], "b");
+  assert.equal(seen[2].headers.OutletCode, undefined);
+  assert.equal(seen[2].headers.outlet_code, undefined);
   context = { token: "no-outlets" };
   await send();
   assert.equal(seen[3].headers.Authorization, "Bearer no-outlets");
+  assert.equal(seen[3].headers["Outlet-Code"], undefined);
+  assert.equal(seen[3].headers.OutletCode, undefined);
   assert.equal(seen[3].headers.outlet_code, undefined);
   context = {};
   await send();
   assert.equal(seen[4].headers.Authorization, undefined);
+  assert.equal(seen[4].headers["Outlet-Code"], undefined);
+  assert.equal(seen[4].headers.OutletCode, undefined);
   assert.equal(seen[4].headers.outlet_code, undefined);
   await request.request(
     { url: "/api/auth/me", adapter },
     { token: "pending-login" },
   );
   assert.equal(seen[5].headers.Authorization, "Bearer pending-login");
-  assert.equal(seen[5].headers["X-Client-Version"], "0.3.5");
+  assert.equal(seen[5].headers["Client-Version"], "0.3.5");
+  const form = new FormData();
+  form.append("file", new Blob(["{}"], { type: "application/json" }), "report.json");
+  await request.request({ url: "/file/uploadFile", method: "POST", data: form, adapter });
+  const contentType = String(seen[6].headers["Content-Type"] ?? seen[6].headers["content-type"] ?? "");
+  assert.equal(contentType.includes("application/json"), false);
+  assert.equal(seen[6].data instanceof FormData, true);
 });
 test("request errors become plain responses without token or Axios config leakage", async () => {
   const { request } = load();
@@ -116,7 +157,10 @@ test("request errors become plain responses without token or Axios config leakag
 });
 
 test("Request records pending, success, business failure and network failure in the shared store", async () => {
+  const previousBase = process.env.CLIENT_API_BASE_URL;
+  delete process.env.CLIENT_API_BASE_URL;
   const { request, logs } = load();
+  process.env.CLIENT_API_BASE_URL = "http://api.example.test";
   let finish;
   const pending = request.request({
     url: "/api/test",
@@ -136,6 +180,7 @@ test("Request records pending, success, business failure and network failure in 
   });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(logs.list()[0].state, "pending");
+  assert.equal(logs.list()[0].url, "http://api.example.test/api/test");
   finish();
   await pending;
   assert.equal(logs.list()[0].state, "success");
@@ -159,4 +204,6 @@ test("Request records pending, success, business failure and network failure in 
   });
   assert.equal(logs.list()[2].state, "error");
   assert.ok(logs.list()[2].response.includes("ECONNREFUSED"));
+  if (previousBase === undefined) delete process.env.CLIENT_API_BASE_URL;
+  else process.env.CLIENT_API_BASE_URL = previousBase;
 });

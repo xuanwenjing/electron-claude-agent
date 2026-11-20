@@ -6,7 +6,6 @@ import { OutletPicker } from "@/components/OutletPicker";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useEffect } from "react";
 import { AppShell } from "@/layouts/AppShell";
-import { CrawlPage } from "@/pages/CrawlPage";
 import { UpdatePage } from "@/pages/UpdatePage";
 import { useCrawlStore } from "@/stores/useCrawlStore";
 import { useUiStore } from "@/stores/useUiStore";
@@ -25,7 +24,7 @@ export function App() {
 
   useEffect(() => {
     if (user) useCrawlStore.getState().init();
-    useCrawlStore.setState({ logs: [], starting: false });
+    useCrawlStore.setState({ logs: [] });
   }, [user, outlet?.outlet_code]);
 
   if (!ready)
@@ -37,9 +36,9 @@ export function App() {
   if (restoreError)
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <section className="w-full max-w-md space-y-4 rounded-lg border bg-card p-6">
+        <section className="w-full max-w-md space-y-4 rounded-sm border bg-card p-6">
           <h1 className="text-xl font-semibold">暂时无法恢复登录</h1>
-          <p role="alert" className="break-words text-sm text-muted-foreground">
+          <p role="alert" className="break-words text-sm text-destructive">
             {restoreError}
           </p>
           <p className="text-sm text-muted-foreground">
@@ -66,7 +65,7 @@ export function App() {
       <OutletPicker />
     ) : (
       <div className="flex min-h-full items-center justify-center p-6">
-        <section className="w-full max-w-md space-y-4 rounded-lg border bg-card p-6">
+        <section className="w-full max-w-md space-y-4 rounded-sm border bg-card p-6">
           <p className="text-muted-foreground">
             当前账号没有可用门店，请联系管理员分配门店。
           </p>
@@ -89,9 +88,6 @@ export function App() {
 
   return (
     <AppShell>
-      <div className={panel === "crawl" ? "contents" : "hidden"}>
-        <CrawlPage />
-      </div>
       <div className={panel === "merchants" ? "contents" : "hidden"}>
         <MerchantConnectionsPage key={`${user.id}:${outlet?.outlet_code}`} />
       </div>

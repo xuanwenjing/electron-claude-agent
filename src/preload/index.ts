@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld("crawlApi", {
   revealExtensionDir: (): Promise<
     { ok: true } | { ok: false; error: string }
   > => ipcRenderer.invoke("crawl:revealExtensionDir"),
-  start: (config: unknown, taskId?: string): Promise<CrawlResult> =>
+  start: (config: unknown, taskId: string): Promise<CrawlResult> =>
     ipcRenderer.invoke("crawl:start", config, taskId),
   cancel: (taskId: string) => ipcRenderer.invoke("crawl:cancel", taskId),
   reloadExtension: (): Promise<
@@ -129,5 +129,7 @@ contextBridge.exposeInMainWorld("authApi", authApi);
 const requestLogsApi: RequestLogsApi = {
   read: () => ipcRenderer.invoke("requestLogs:read"),
   clear: () => ipcRenderer.invoke("requestLogs:clear"),
+  readConsole: () => ipcRenderer.invoke("requestLogs:readConsole"),
+  clearConsole: () => ipcRenderer.invoke("requestLogs:clearConsole"),
 };
 contextBridge.exposeInMainWorld("requestLogsApi", requestLogsApi);

@@ -260,7 +260,7 @@ export function MerchantConnectionsPage() {
         </Button>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
@@ -321,13 +321,13 @@ export function MerchantConnectionsPage() {
                       </div>
                     )}
                     {task?.error && (
-                      <p role="alert" className="text-sm text-red-600">
+                      <p role="alert" className="text-sm text-destructive">
                         {task.error}。请在 Edge
                         中登录对应平台并选择正确门店后重试。
                       </p>
                     )}
                     {task?.candidate && (
-                      <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+                      <div className="space-y-2 rounded-sm border bg-muted/40 p-3 text-sm">
                         <p className="font-medium">
                           请确认以下门店属于「{outlet.outlet_name}」
                         </p>

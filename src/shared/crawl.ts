@@ -5,5 +5,16 @@ export type CrawlResult = {
   data?: unknown;
   error?: string | null;
   errorCode?: string | null;
-  resultPath?: string | null;
+  report?: {
+    taskId?: string;
+    clientTaskCode?: string;
+    businessType?: string;
+    ok: boolean;
+    error: string | null;
+    errorCode: string | null;
+    data: unknown;
+    config: unknown;
+    logs: { at: string; message: string }[];
+    savedAt: string;
+  } | null;
 };

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { net } from "electron";
 import AdmZip from "adm-zip";
 import fs from "node:fs";
@@ -32,8 +33,15 @@ async function download(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
+export function assertSkillSha256(body: Buffer, sha256: string): void {
+  const actual = createHash("sha256").update(body).digest("hex");
+  if (actual.toLowerCase() !== sha256.trim().toLowerCase()) {
+    throw new Error("Skill 包 SHA256 不一致");
+  }
+}
+
 function loadZip(skill: RunAgentSkill, log: (msg: string) => void): Promise<Buffer> {
-  const key = `${skill.url}@${skill.version}`;
+  const key = skill.sha256 ? `sha256:${skill.sha256.trim().toLowerCase()}` : `${skill.url}@${skill.version}`;
   const cached = zipCache.get(key);
   if (cached) {
     zipCache.delete(key);
@@ -41,8 +49,11 @@ function loadZip(skill: RunAgentSkill, log: (msg: string) => void): Promise<Buff
     log(`复用 Skill 包: ${key}`);
     return cached;
   }
-  log(`下载 Skill 包: ${key}`);
-  const pending = download(skill.url);
+  log(`下载 Skill 包: ${skill.version}`);
+  const pending = download(skill.url).then((body) => {
+    if (skill.sha256) assertSkillSha256(body, skill.sha256);
+    return body;
+  });
   zipCache.set(key, pending);
   pending.catch(() => {
     if (zipCache.get(key) === pending) zipCache.delete(key);

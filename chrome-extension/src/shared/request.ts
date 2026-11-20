@@ -14,7 +14,7 @@ import type {
  */
 
 export const defaultSettings = {
-  source: 'chrome-plugin',
+  Source: 'chrome-plugin',
 };
 
 export class Request {
@@ -43,7 +43,7 @@ export class Request {
     this.service.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         if (chrome.runtime.getManifest?.()?.version) {
-          config.headers['X-Plugin-Version'] = chrome.runtime.getManifest().version;
+          config.headers['Plugin-Version'] = chrome.runtime.getManifest().version;
         }
         return config;
       },

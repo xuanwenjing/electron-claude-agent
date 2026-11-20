@@ -1,15 +1,9 @@
 /**
  * 平台定义：域名、名称、登录页。对齐 wormhole CROWLER_DOAMIN / loginUrlMap。
  */
-import { HotelPlatform } from "../types";
+import { HotelPlatform, PLATFORM_LABELS } from "../../../../src/shared/merchant";
 
-export const PLATFORM_LABELS: Record<HotelPlatform, string> = {
-  [HotelPlatform.CtripEbk]: "携程EBK",
-  [HotelPlatform.CtripHotel]: "携程酒店",
-  [HotelPlatform.Meituan]: "美团",
-  [HotelPlatform.Douyin]: "抖音",
-  [HotelPlatform.Fliggy]: "飞猪",
-};
+export { PLATFORM_LABELS };
 
 /** 平台业务页域名 → 平台（不含 passport 等登录域名） */
 const PLATFORM_HOSTS: Record<string, HotelPlatform> = {

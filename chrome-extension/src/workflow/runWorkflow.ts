@@ -86,6 +86,9 @@ export async function runWorkflow(
     }
 
     const collector = createCollector();
+    if (config.variables && typeof config.variables === "object" && !Array.isArray(config.variables)) {
+      Object.assign(collector.variables, config.variables);
+    }
     let windowId: number | null = null;
     let tabId: number | null = null;
     /** 任务标签页 / 采集窗口被关闭：立即结束本次尝试，进入重试（重新建窗口和标签页） */

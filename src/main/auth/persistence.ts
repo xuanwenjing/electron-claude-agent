@@ -12,7 +12,7 @@ const schema = z.object({
   outletCode: z.string().min(1),
 });
 const apiBaseURL = () =>
-  (process.env.CLIENT_API_BASE_URL || "http://localhost:3000").replace(
+  process.env.CLIENT_API_BASE_URL!.replace(
     /\/+$/,
     "",
   );

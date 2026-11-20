@@ -45,10 +45,8 @@
       "allow_exception": true,
       "save_as": "replies",
       "run_agent_params": {
-        "skills": [
-          { "url": "https://test-img.bwagent.net/agent/skills/eb3fab17e940e819feade6a41749d7d5/skill_ed54a6d383140987b034fe4897f9a2ca/online/1/hotel-comment-reply.zip", "version": "1.0.0" }
-        ],
-        "prompt": "使用 hotel-comment-reply 技能，为下面这条携程点评写商家回复，按技能要求只输出 JSON。\n酒店名：${_hotelInfo.hotelInfo.hotelName}\n评分：${comment.avgScore}\n点评内容：${comment.content}",
+        "prompt": "请根据这条评论生成回复：${comment}",
+        "system_prompt": "请根据这条评论生成回复：${comment}",
         "output_format": "json",
         "timeout": 180000
       }

@@ -54,15 +54,14 @@ export interface CallBackendParam {
   timeout?: number;
 }
 
-/** run_agent：由客户端解压 Skill 包并运行大模型，结果用步骤的 save_as 写入变量 */
+/** run_agent：客户端下发前已写好提示词、模型和 Skill，插件只替换 ${expr} */
 export interface RunAgentStepParam {
-  /** 用户提示词，支持 ${expr}；对象 / 数组会先解析 ${expr} / __ref 再序列化成 JSON */
+  /** 提示词，可含 ${expr}；客户端从 Bot 详情填入 */
   prompt: unknown;
-  /** 追加的系统提示词，支持 ${expr} */
+  /** 追加给模型的系统提示词，可含 ${expr} */
   system_prompt?: string;
   model?: string;
-  /** Skill 包：远程 zip，根目录即单个 skill（有 SKILL.md）；url 支持 ${expr}，客户端进程内 url + version 相同只下载一次 */
-  skills?: { url: string; version: string }[];
+  skills?: { url: string; version: string; sha256?: string }[];
   /** json：把模型输出解析成对象（兼容 ```json 代码块），解析失败本步失败；默认 text */
   output_format?: "text" | "json";
   /** 毫秒，默认 600000 */
@@ -127,6 +126,8 @@ export interface WorkflowConfig {
   outlet_name?: string;
   /** 当前账号门店已绑定的平台门店；group 为平台值，code 为平台门店编号。由客户端在启动任务时写入 */
   external_outlets?: Array<{ code: string; name?: string; group: string }>;
+  /** 任务开始时写入变量，供 ${expr} 使用 */
+  variables?: Record<string, unknown>;
 }
 
 export interface Collector {

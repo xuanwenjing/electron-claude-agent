@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/useAuthStore";
 
 export function LoginPage() {
@@ -41,18 +42,16 @@ export function LoginPage() {
     }
   };
   return (
-    <div className="flex min-h-full items-center justify-center bg-muted/30 p-6">
+    <div className="flex min-h-full items-center justify-center p-6">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <p className="mb-2 text-xs tracking-widest text-muted-foreground">
-            CLAUDE AGENT · 门店工作台
-          </p>
-          <CardTitle className="text-2xl">登录客户端</CardTitle>
+        <CardHeader className="px-7 pt-7">
+          <p className="text-sm text-muted-foreground">门店工作台</p>
+          <CardTitle className="text-3xl font-semibold">登录</CardTitle>
           <CardDescription>
             使用手机号验证码登录，开始管理门店抓取任务。
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-7 pb-7">
           <form
             className="space-y-5"
             onSubmit={(event) => {
@@ -87,9 +86,9 @@ export function LoginPage() {
                   id="login-code"
                   autoComplete="one-time-code"
                   inputMode="numeric"
-                  placeholder="请输入 6 位验证码"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
+                  placeholder="请输入 4 位验证码"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
                   required
                   value={code}
                   disabled={busy}
@@ -115,7 +114,13 @@ export function LoginPage() {
               </div>
             </div>
             {smsMessage && (
-              <p role="status" className="text-sm text-muted-foreground">
+              <p
+                role={smsMessage === "验证码已发送" ? "status" : "alert"}
+                className={cn(
+                  "text-sm",
+                  smsMessage === "验证码已发送" ? "text-success" : "text-destructive",
+                )}
+              >
                 {smsMessage}
               </p>
             )}

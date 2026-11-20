@@ -27,7 +27,7 @@ export function ExtensionConnectionGuide() {
   return (
     <section
       aria-label="扩展连接指引"
-      className="space-y-3 rounded-md border border-border bg-muted/30 p-4 text-sm"
+      className="space-y-3 rounded-sm border bg-card p-6 text-sm"
     >
       <h2 className="font-medium">扩展未连接</h2>
       <p className="text-muted-foreground">
@@ -61,7 +61,7 @@ export function ExtensionConnectionGuide() {
         </Button>
       </div>
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="text-destructive">
           {error}
         </p>
       )}

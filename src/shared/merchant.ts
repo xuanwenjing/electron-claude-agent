@@ -1,12 +1,20 @@
 /** 客户端、扩展任务和绑定接口共用的平台值。 */
 export const HotelPlatform = {
-  CtripEbk: "ctripEbk",
-  CtripHotel: "ctripHotel",
-  Meituan: "meituan",
-  Douyin: "douyin",
-  Fliggy: "fliggy",
+  CtripEbk: "CtripEbk",
+  CtripHotel: "CtripHotel",
+  Meituan: "MeiTuan",
+  Douyin: "DouYin",
+  Fliggy: "Fliggy",
 } as const;
 export type HotelPlatform = (typeof HotelPlatform)[keyof typeof HotelPlatform];
+
+export const PLATFORM_LABELS: Record<HotelPlatform, string> = {
+  [HotelPlatform.CtripEbk]: "携程EBK",
+  [HotelPlatform.CtripHotel]: "携程酒店",
+  [HotelPlatform.Meituan]: "美团",
+  [HotelPlatform.Douyin]: "抖音",
+  [HotelPlatform.Fliggy]: "飞猪",
+};
 
 /** 仅在读取旧接口数据时兼容历史名称，其余链路统一使用上面的值。 */
 export function normalizePlatform(value: string): string {

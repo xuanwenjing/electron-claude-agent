@@ -72,8 +72,17 @@ export type ToExtensionMessage =
 /** run_agent 用到的 Skill 包：远程 zip，解压后根目录即单个 skill（有 SKILL.md） */
 export type RunAgentSkill = {
   url: string;
-  /** 客户端进程内 url + version 相同的包只下载一次，同一 version 内容不能变 */
+  /** 客户端进程内 url + version 相同的包只下载一次；有 sha256 时按校验值复用 */
   version: string;
+  sha256?: string;
+};
+
+/** GET /client/bots/{bot_code} 里 run_agent 要用的字段 */
+export type BotRuntime = {
+  botCode: string;
+  systemPrompt: string;
+  model?: string;
+  skills: RunAgentSkill[];
 };
 
 export type RunAgentParams = {

@@ -158,7 +158,7 @@ let pending: Promise<EnsureConnectedResult> | null = null;
 
 /**
  * 扩展未连接时：启动 Edge，等扩展连上 bridge 后通知其最小化浏览器窗口。
- * log 记录每一步，供写入 result.json。
+ * log 记录每一步，随任务结果一起上报。
  */
 export function ensureExtensionConnected(log: (msg: string) => void = () => {}): Promise<EnsureConnectedResult> {
   if (isExtensionConnected()) return Promise.resolve({ ok: true });

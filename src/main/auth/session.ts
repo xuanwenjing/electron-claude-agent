@@ -76,7 +76,7 @@ export class AuthSession {
       let user;
       try {
         user = profileSchema.parse(
-          await this.post("/api/auth/me", {}, saved.token),
+          await this.post("/auth/me", {}, saved.token),
         );
       } catch (error) {
         const code = String((error as { code?: unknown })?.code ?? "");
@@ -166,7 +166,7 @@ export class AuthSession {
     return value.trim();
   }
   async sendSms(mobile: unknown): Promise<void> {
-    await this.post("/api/hds/sendSms", {
+    await this.post("/api/login/sendSms", {
       mobile: this.mobile(mobile),
       area_code: "86",
     });
@@ -175,8 +175,8 @@ export class AuthSession {
     if (this.changing) throw new Error("正在处理，请稍后再试");
     if (this.getState().user) throw new Error("请先退出当前账号");
     const phone = this.mobile(mobile);
-    if (typeof code !== "string" || !/^\d{6}$/.test(code.trim()))
-      throw new Error("请输入 6 位验证码");
+    if (typeof code !== "string" || !/^\d{4}$/.test(code.trim()))
+      throw new Error("请输入 4 位验证码");
     this.changing = true;
     try {
       const credentials = z
@@ -193,7 +193,7 @@ export class AuthSession {
         );
       const expiresAt = Date.now() + credentials.expire_at * 1000;
       const user = profileSchema.parse(
-        await this.post("/api/auth/me", {}, credentials.access_token),
+        await this.post("/auth/me", {}, credentials.access_token),
       );
       if (!user.outlets.length)
         throw new Error("当前账号没有可用门店，请联系管理员分配门店");
@@ -224,7 +224,7 @@ export class AuthSession {
     if (!state.outlet) throw new Error("请先选择门店");
     const outletCode = state.outlet.outlet_code;
     const revision = this.revision;
-    const user = profileSchema.parse(await this.post("/api/auth/me", {}));
+    const user = profileSchema.parse(await this.post("/auth/me", {}));
     if (!this.getState().user || this.changing || revision !== this.revision)
       throw new Error("门店或登录状态已变更，请重试");
     const outlet = user.outlets.find((item) => item.outlet_code === outletCode);
