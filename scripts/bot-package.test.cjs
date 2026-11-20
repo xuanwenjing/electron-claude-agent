@@ -65,6 +65,7 @@ test("bot detail becomes the agent prompt, model and skills", async () => {
   assert.equal(runtime.botCode, "commentator");
   assert.equal(runtime.systemPrompt, "按任务参数处理评价 ${comment.content}");
   assert.equal(runtime.model, "bot-configured-model");
+  assert.equal(runtime.maxTokens, 1024);
   assert.equal(runtime.skills.length, 1);
   assert.equal(runtime.skills[0].url, "https://example.com/skill.zip");
   assert.equal(runtime.skills[0].version, "7");

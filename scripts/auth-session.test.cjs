@@ -128,17 +128,25 @@ test("account without outlets cannot login or retain credentials, and can retry 
   await f.session.login("13800138000", "1234");
   assert.equal(f.session.getState().outlet.outlet_code, "a");
 });
-test("expiry cancels tasks and clears both token and outlet", async () => {
+test("expiry keeps the session and running tasks until the user logs out", async () => {
   const f = fixture();
   await f.session.login("13800138000", "1234");
+  f.session.chooseOutlet("a");
   f.setActive(true);
   now += 7200001;
-  assert.equal(f.session.getState().user, null);
-  assert.equal(f.cancels(), 1);
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(f.session.getRequestContext())),
-    {},
-  );
+  assert.equal(f.session.getState().outlet.outlet_code, "a");
+  assert.equal(f.session.getRequestContext().token, "secret");
+  assert.equal(f.cancels(), 0);
+});
+test("refresh keeps the session when the current outlet disappears", async () => {
+  const stores = JSON.parse(JSON.stringify(outlets));
+  const f = fixture({ stores });
+  await f.session.login("13800138000", "1234");
+  f.session.chooseOutlet("b");
+  stores.pop();
+  await assert.rejects(() => f.session.refresh(), /当前门店已不可用/);
+  assert.equal(f.session.getState().outlet.outlet_code, "b");
+  assert.equal(f.cancels(), 0);
 });
 test("logout with active tasks respects confirmation", async () => {
   const f = fixture();
@@ -208,7 +216,8 @@ test("login persists absolute expiry; confirmed outlet survives a new session an
   const f = persistedFixture(null);
   const first = f.make();
   await first.login("13800138000", "1234");
-  assert.equal(f.saved(), null);
+  assert.equal(f.saved().outletCode, "");
+  assert.equal((await f.make().restore()).outlet, null);
   first.chooseOutlet("b");
   const expiry = f.saved().expiresAt;
   const reopened = f.make();
@@ -258,20 +267,30 @@ test("network error retains credentials; a removed outlet asks for a new choice"
   assert.equal((await only.make().restore()).outlet.outlet_code, "a");
   assert.equal(only.saved().outletCode, "a");
 });
-test("expired, rejected and outlet-less sessions clear persisted credentials", async () => {
-  for (const scenario of ["expired", "rejected", "no-outlets"]) {
-    const f = persistedFixture(
-      {
-        token: "secret",
-        expiresAt: now + (scenario === "expired" ? -1 : 100000),
-        outletCode: "a",
-      },
-      scenario === "no-outlets" ? [] : outlets,
-    );
-    if (scenario === "rejected")
-      f.fail(Object.assign(new Error("invalid"), { code: 401 }));
-    assert.equal((await f.make().restore()).user, null);
-    assert.equal(f.saved(), null);
-    if (scenario === "expired") assert.equal(f.calls(), 0);
-  }
+test("expired, rejected and outlet-less sessions keep persisted credentials", async () => {
+  const expired = persistedFixture({
+    token: "secret",
+    expiresAt: now - 1,
+    outletCode: "a",
+  });
+  assert.equal((await expired.make().restore()).outlet.outlet_code, "a");
+  assert.equal(expired.saved().token, "secret");
+
+  const rejected = persistedFixture({
+    token: "secret",
+    expiresAt: now + 100000,
+    outletCode: "a",
+  });
+  rejected.fail(Object.assign(new Error("invalid"), { code: 401 }));
+  await assert.rejects(rejected.make().restore(), /登录凭证已失效/);
+  assert.equal(rejected.saved().token, "secret");
+
+  const empty = persistedFixture(
+    { token: "secret", expiresAt: now + 100000, outletCode: "a" },
+    [],
+  );
+  const state = await empty.make().restore();
+  assert.equal(state.user.outlets.length, 0);
+  assert.equal(state.outlet, null);
+  assert.equal(empty.saved().token, "secret");
 });

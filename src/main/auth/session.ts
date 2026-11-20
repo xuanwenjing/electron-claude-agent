@@ -43,7 +43,6 @@ export class AuthSession {
   private changing = false;
   private restored = false;
   private restoring: Promise<AuthState> | null = null;
-  private expiryTimer: ReturnType<typeof setTimeout> | undefined;
   private tasks = { hasActive: () => false, cancel: (_reason: string) => {} };
   onChange: (state: AuthState) => void = () => {};
 
@@ -69,10 +68,6 @@ export class AuthSession {
         this.restored = true;
         return this.state;
       }
-      if (saved.expiresAt <= Date.now()) {
-        this.clear("登录已过期");
-        return this.state;
-      }
       let user;
       try {
         user = profileSchema.parse(
@@ -89,19 +84,9 @@ export class AuthSession {
             "AUTH-TOKEN-INVALID",
             "token无效",
           ].includes(code)
-        ) {
-          this.clear("登录凭证已失效");
-          return this.state;
-        }
+        )
+          throw new Error("登录凭证已失效，请重新登录");
         throw new Error("暂时无法验证登录状态，请检查网络或服务后重试");
-      }
-      if (saved.expiresAt <= Date.now()) {
-        this.clear("登录已过期");
-        return this.state;
-      }
-      if (!user.outlets.length) {
-        this.clear("当前账号没有可用门店");
-        return this.state;
       }
       const outlet =
         user.outlets.find((item) => item.outlet_code === saved.outletCode) ??
@@ -113,42 +98,20 @@ export class AuthSession {
       this.state = { user, outlet };
       this.revision++;
       this.restored = true;
-      this.scheduleExpiry();
       this.onChange(this.state);
       return this.state;
     } finally {
       this.changing = false;
     }
   }
-  private scheduleExpiry(): void {
-    clearTimeout(this.expiryTimer);
-    this.expiryTimer = setTimeout(
-      () => {
-        if (Date.now() < this.expiresAt) {
-          this.scheduleExpiry();
-          return;
-        }
-        try {
-          this.clear("登录已过期，任务已中断");
-        } catch {
-          console.error("[auth] 无法清理已过期的本地凭证");
-        }
-      },
-      Math.min(Math.max(0, this.expiresAt - Date.now()), 2_147_483_647),
-    );
-    this.expiryTimer.unref?.();
-  }
   setTaskControl(control: typeof this.tasks): void {
     this.tasks = control;
   }
   getState(): AuthState {
-    if (this.token && Date.now() >= this.expiresAt)
-      this.clear("登录已过期，任务已中断");
     return this.state;
   }
   private clear(reason: string): void {
     this.tasks.cancel(reason);
-    clearTimeout(this.expiryTimer);
     this.token = "";
     this.state = emptyState();
     this.expiresAt = 0;
@@ -200,17 +163,14 @@ export class AuthSession {
       const outlet = user.outlets.length === 1 ? user.outlets[0] : null;
       this.token = credentials.access_token;
       this.expiresAt = expiresAt;
-      if (outlet) {
-        this.persistence?.save({
-          token: credentials.access_token,
-          expiresAt,
-          outletCode: outlet.outlet_code,
-        });
-      }
+      this.persistence?.save({
+        token: credentials.access_token,
+        expiresAt,
+        outletCode: outlet?.outlet_code ?? "",
+      });
       this.state = { user, outlet };
       this.revision++;
       this.restored = true;
-      this.scheduleExpiry();
       this.onChange(this.state);
       return this.state;
     } finally {
@@ -228,10 +188,8 @@ export class AuthSession {
     if (!this.getState().user || this.changing || revision !== this.revision)
       throw new Error("门店或登录状态已变更，请重试");
     const outlet = user.outlets.find((item) => item.outlet_code === outletCode);
-    if (!outlet) {
-      this.clear("当前门店访问权限已失效");
-      throw new Error("当前门店已不可用，请重新登录");
-    }
+    if (!outlet)
+      throw new Error("当前门店已不可用，请联系管理员或退出登录后重新选择");
     this.state = { user, outlet };
     this.onChange(this.state);
     return this.state;

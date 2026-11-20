@@ -81,14 +81,16 @@ async function expandAgentSteps(
       const code = (typeof params.bot_code === "string" ? params.bot_code : "").trim();
       if (!code) throw new Error("run_agent 缺少 bot_code");
       const bot = await loadBot(code);
-      const { output_format, timeout } = params;
+      const { output_format, timeout, max_turns } = params;
       step.run_agent_params = {
         prompt: bot.systemPrompt,
         system_prompt: bot.systemPrompt,
         ...(bot.model ? { model: bot.model } : {}),
+        ...(bot.maxTokens ? { max_tokens: bot.maxTokens } : {}),
         ...(bot.skills.length ? { skills: bot.skills } : {}),
         ...(output_format === undefined ? {} : { output_format }),
         ...(timeout === undefined ? {} : { timeout }),
+        ...(max_turns === undefined ? {} : { max_turns }),
       };
     }
     if (step.children !== undefined) await expandAgentSteps(step.children, loadBot);

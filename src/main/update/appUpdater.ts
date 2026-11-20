@@ -6,21 +6,7 @@ import type { UpdateInfo } from "electron-updater";
 import { autoUpdater } from "./updater";
 
 import { hasActiveCrawlTasks } from "../crawl/bridgeServer";
-
-export type UpdateStatusEvent = {
-  kind:
-    | "checking"
-    | "available"
-    | "not-available"
-    | "progress"
-    | "downloaded"
-    | "error"
-    | "disabled";
-  message: string;
-  version?: string;
-  percent?: number;
-  busy?: boolean;
-};
+import type { UpdateStatusEvent } from "../../shared/update";
 
 type GetWindow = () => BrowserWindow | null;
 
@@ -52,7 +38,7 @@ const NIGHT_START_HOUR = 2;
 const NIGHT_END_HOUR = 5;
 /** 临时：下载完成后马上安装，方便看重启后窗口是否抢前台。测完改回 false */
 const INSTALL_NOW_FOR_TEST = true;
-const UPDATE_CHECK_INTERVAL_MS = INSTALL_NOW_FOR_TEST ? 15_000 : 60 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = INSTALL_NOW_FOR_TEST ? 120_000 : 60 * 60 * 1000;
 const UPDATE_CHECK_DELAY_MS = INSTALL_NOW_FOR_TEST ? 5_000 : 15_000;
 const INSTALL_NOW_DELAY_MS = 5_000;
 const BUSY_RETRY_MS = 60_000;

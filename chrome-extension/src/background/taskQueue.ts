@@ -35,8 +35,8 @@ const DEFAULT_NON_BROWSER_MAX_TASK = 3;
 const TASK_TIMEOUT_MS = 60 * 60 * 1000;
 
 let queue: QueuedTask[] = [];
-/** 执行中的任务：taskId → 取消令牌 / 类型 */
-const running = new Map<string, { token: CancelToken; kind: TaskKind }>();
+/** 执行中的任务：taskId → 取消令牌 / 类型 / 被 clearQueue 取消时的原因 */
+const running = new Map<string, { token: CancelToken; kind: TaskKind; cancelReason?: string }>();
 /** 浏览器任务的启动间隔 */
 let lastBrowserStartTime = 0;
 let shiftTimer: ReturnType<typeof setTimeout> | null = null;
@@ -156,7 +156,11 @@ export function clearQueue(reason = "连接已断开，任务已取消"): void {
   for (const t of pending) {
     sendFn({ type: ToClient.TaskResult, taskId: t.taskId, ok: false, error: reason, errorCode: TaskErrorCode.Cancelled });
   }
-  for (const { token } of running.values()) token.cancel();
+  for (const [taskId, active] of running) {
+    active.cancelReason = reason;
+    sendFn({ type: ToClient.TaskProgress, taskId, message: reason });
+    active.token.cancel();
+  }
   lastBrowserStartTime = 0;
 }
 
@@ -236,7 +240,7 @@ async function execute(item: QueuedTask, token: CancelToken): Promise<void> {
         type: ToClient.TaskResult,
         taskId,
         ok: false,
-        error: result.error || "任务已取消",
+        error: running.get(taskId)?.cancelReason || result.error || "任务已取消",
         errorCode: result.errorCode ?? TaskErrorCode.Cancelled,
         data: result.data,
       });

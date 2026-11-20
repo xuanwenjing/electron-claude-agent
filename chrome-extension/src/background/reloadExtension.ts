@@ -38,7 +38,7 @@ export async function requestReloadExtension(
     });
 
     // 清空排队、取消当前任务（对齐 batchTaskManager.reset）
-    clearQueue("插件重载中");
+    clearQueue("插件重载中，任务已取消");
 
     // 等当前 execute 收尾（最多 5s）
     const deadline = Date.now() + 5000;

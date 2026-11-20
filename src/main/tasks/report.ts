@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { getDeviceNumber } from "../push/deviceId";
 import { request } from "../utils/request";
 
-function deviceHeaders() {
-  return { "Device-Number": getDeviceNumber(), "DeviceNumber": getDeviceNumber() };
+export function deviceHeaders() {
+  return { "Device-Number": getDeviceNumber() };
 }
 
 /** 本地 cron 触发后创建这一次执行。同一任务、门店、计划时间重试会返回同一个实例。 */

@@ -8,13 +8,10 @@ type CrawlState = {
   /** 浏览器「加载解压缩的扩展」应选择的目录 */
   extensionDir: string;
   logs: LogLine[];
-  reloading: boolean;
   inited: boolean;
   appendLog: (kind: LogKind, text: string) => void;
   clearLogs: () => void;
   init: () => void;
-  reloadExtension: () => Promise<void>;
-  revealExtensionDir: () => Promise<void>;
 };
 
 let unsubs: Array<() => void> = [];
@@ -24,7 +21,6 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
   port: BRIDGE_PORT,
   extensionDir: "",
   logs: [],
-  reloading: false,
   inited: false,
 
   appendLog: (kind, text) =>
@@ -54,27 +50,5 @@ export const useCrawlStore = create<CrawlState>((set, get) => ({
         set({ connected, port, extensionDir }),
       );
     set({ inited: true });
-  },
-
-  reloadExtension: async () => {
-    set({ reloading: true });
-    try {
-      const res = await window.crawlApi.reloadExtension();
-      if (!res.ok) {
-        get().appendLog("error", res.error);
-        return;
-      }
-      get().appendLog(
-        "log",
-        `已下发扩展重载任务 ${res.taskId}（将清空队列并 runtime.reload）`,
-      );
-    } finally {
-      set({ reloading: false });
-    }
-  },
-
-  revealExtensionDir: async () => {
-    const res = await window.crawlApi.revealExtensionDir();
-    if (!res.ok) get().appendLog("error", `打开扩展目录失败: ${res.error}`);
   },
 }));

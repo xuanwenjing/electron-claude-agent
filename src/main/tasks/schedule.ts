@@ -21,6 +21,14 @@ function minuteKey(date: Date, timeZone: string): string {
   return `${time.year}-${pad(time.month)}-${pad(time.day)} ${pad(time.hour)}:${pad(time.minute)}`;
 }
 
+function activeIn(task: ClientTask, outletCode: string): boolean {
+  return task.status === "ACTIVE" && task.outlet_codes.includes(outletCode);
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * 登录后保住当前门店的启用任务，只按 cron_expr 到点执行。
  * 推送的 config.reset 重新拉取当前门店的全部任务；config.updated 查出详情后替换这一条，包含新的 cron。
@@ -47,20 +55,17 @@ export function createTaskScheduler(options: {
   let timer: ReturnType<typeof setInterval> | undefined;
   const lastFired = new Map<string, string>();
 
-  const replace = (list: ClientTask[]) => {
-    tasks = new Map(list.map((task) => [task.client_task_code, task]));
-  };
-
   const reload = async () => {
     const current = outlet;
     const gen = ++generation;
     try {
       const list = await options.client.listActive(current);
       if (gen !== generation || current !== outlet) return;
-      replace(list.filter((task) => task.status === "ACTIVE" && task.outlet_codes.includes(current)));
+      const active = list.filter((task) => activeIn(task, current));
+      tasks = new Map(active.map((task) => [task.client_task_code, task]));
       log(`已载入 ${tasks.size} 个任务`);
     } catch (error) {
-      log(`任务列表失败：${error instanceof Error ? error.message : String(error)}`);
+      log(`任务列表失败：${errorText(error)}`);
     }
   };
 
@@ -70,11 +75,11 @@ export function createTaskScheduler(options: {
     try {
       task = await options.client.get(code);
     } catch (error) {
-      log(`任务 ${code} 查询失败：${error instanceof Error ? error.message : String(error)}`);
+      log(`任务 ${code} 查询失败：${errorText(error)}`);
       return;
     }
     if (current !== outlet) return;
-    if (!task || task.status !== "ACTIVE" || !task.outlet_codes.includes(current)) {
+    if (!task || !activeIn(task, current)) {
       tasks.delete(code);
       log(`任务 ${code} 已停用或不属于当前门店`);
       return;
@@ -83,25 +88,23 @@ export function createTaskScheduler(options: {
     log(`已更新任务 ${code}，cron ${task.cron_expr}`);
   };
 
+  /** 清空定时表并停掉定时器；进行中的列表请求作废。 */
+  const clear = () => {
+    generation++;
+    outlet = "";
+    tasks = new Map();
+    lastFired.clear();
+    if (timer) clearInterval(timer);
+    timer = undefined;
+  };
+
   return {
     tasks: () => [...tasks.values()],
-    stop: () => {
-      generation++;
-      outlet = "";
-      tasks = new Map();
-      lastFired.clear();
-      if (timer) clearInterval(timer);
-      timer = undefined;
-    },
+    stop: clear,
     sync: (token?: string, outletCode?: string) => {
       if (!token || !outletCode) {
         if (outlet) log("已停止任务调度");
-        generation++;
-        outlet = "";
-        tasks = new Map();
-        lastFired.clear();
-        if (timer) clearInterval(timer);
-        timer = undefined;
+        clear();
         return;
       }
       if (outlet !== outletCode) {

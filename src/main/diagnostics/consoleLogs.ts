@@ -1,14 +1,9 @@
 import { formatWithOptions } from "node:util";
 
-const levels = ["log", "info", "warn", "error", "debug"] as const;
-export type ConsoleLevel = (typeof levels)[number];
+import type { ConsoleLog } from "../../shared/requestLogs";
 
-export type ConsoleLog = {
-  id: number;
-  at: string;
-  level: ConsoleLevel;
-  message: string;
-};
+type ConsoleLevel = ConsoleLog["level"];
+const levels: ConsoleLevel[] = ["log", "info", "warn", "error", "debug"];
 
 const limit = 200;
 let entries: ConsoleLog[] = [];

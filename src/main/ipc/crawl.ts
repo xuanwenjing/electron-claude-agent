@@ -3,6 +3,7 @@ import { crawlTasks } from "../crawl/taskManager";
 import { ipcMain, shell } from "electron";
 
 import { BRIDGE_PORT, TaskErrorCode } from "../../shared/bridgeProtocol";
+import type { CrawlLogEntry, CrawlResult } from "../../shared/crawl";
 import { normalizePlatform, PLATFORM_LABELS } from "../../shared/merchant";
 import {
   isExtensionConnected,
@@ -17,7 +18,6 @@ import {
   openInEdge,
   restartEdgeWithSiteUnblocked,
 } from "../crawl/edgeBrowser";
-import { type CrawlLogEntry } from "../crawl/resultFile";
 import {
   flushPendingExtensionReload,
   getInstalledExtensionDir,
@@ -83,25 +83,7 @@ export async function startCrawl(
     businessType?: string;
     clientTaskCode?: string;
   },
-): Promise<{
-  ok: boolean;
-  taskId?: string;
-  data?: unknown;
-  error?: string;
-  errorCode?: string | null;
-  report?: {
-    taskId?: string;
-    clientTaskCode?: string;
-    businessType?: string;
-    ok: boolean;
-    error: string | null;
-    errorCode: string | null;
-    data: unknown;
-    config: unknown;
-    logs: CrawlLogEntry[];
-    savedAt: string;
-  } | null;
-}> {
+): Promise<CrawlResult> {
   const businessType = options?.businessType?.trim() || undefined;
   const clientTaskCode = options?.clientTaskCode?.trim() || undefined;
   if (!config || typeof config !== "object" || Array.isArray(config)) {

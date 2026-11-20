@@ -61,6 +61,8 @@ function buildRequest(params: RunAgentStepParam, vars: Record<string, unknown>):
     model: params.model || undefined,
     skills: skills.length ? skills : undefined,
     timeoutMs: params.timeout,
+    maxTokens: params.max_tokens,
+    maxTurns: params.max_turns,
   };
 }
 

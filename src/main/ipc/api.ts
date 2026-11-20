@@ -1,22 +1,13 @@
 import { authSession } from "../auth";
 import { ipcMain } from "electron";
 
+import type { RequestConfig } from "../../shared/request";
 import { request } from "../utils/request";
-
-/** renderer 可传的请求字段；baseURL 固定在主进程，不接受绝对 URL */
-export type RendererRequestConfig = {
-  url: string;
-  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  params?: Record<string, unknown>;
-  data?: unknown;
-  headers?: Record<string, string>;
-  timeout?: number;
-};
 
 export function registerApiIpc(): void {
   ipcMain.handle(
     "api:request",
-    async (_event, config: RendererRequestConfig) => {
+    async (_event, config: RequestConfig) => {
       if (!config || typeof config.url !== "string" || !config.url) {
         return { code: -1, msg: "url 不能为空", data: null };
       }

@@ -11,6 +11,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/useAuthStore";
 
+const SMS_SENT = "验证码已发送";
+
 export function LoginPage() {
   const { login, busy, error } = useAuthStore();
   const [mobile, setMobile] = useState("");
@@ -33,7 +35,7 @@ export function LoginPage() {
       const result = await window.authApi.sendSms(mobile.trim());
       if (result.ok) {
         setCountdown(60);
-        setSmsMessage("验证码已发送");
+        setSmsMessage(SMS_SENT);
       } else setSmsMessage(result.error);
     } catch (err) {
       setSmsMessage(String(err));
@@ -115,10 +117,10 @@ export function LoginPage() {
             </div>
             {smsMessage && (
               <p
-                role={smsMessage === "验证码已发送" ? "status" : "alert"}
+                role={smsMessage === SMS_SENT ? "status" : "alert"}
                 className={cn(
                   "text-sm",
-                  smsMessage === "验证码已发送" ? "text-success" : "text-destructive",
+                  smsMessage === SMS_SENT ? "text-success" : "text-destructive",
                 )}
               >
                 {smsMessage}

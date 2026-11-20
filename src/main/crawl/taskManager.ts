@@ -1,5 +1,5 @@
 import type { TaskResultMessage } from "../../shared/bridgeProtocol";
-import type { CrawlLogEntry } from "./resultFile";
+import type { CrawlLogEntry } from "../../shared/crawl";
 
 export type CrawlTask = {
   taskId: string;

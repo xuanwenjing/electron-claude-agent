@@ -51,7 +51,6 @@ test("a run asks for an instance, uploads the json, then reports the url", async
   assert.equal(calls[0].data.client_task_code, "task_review_001");
   assert.equal(calls[0].data.scheduled_at, "2026-11-19T01:00:00Z");
   assert.equal(calls[0].headers["Device-Number"], "device-1");
-  assert.equal(calls[0].headers.DeviceNumber, "device-1");
 
   const payload = {
     taskId: "inst_001",
@@ -80,7 +79,6 @@ test("a run asks for an instance, uploads the json, then reports the url", async
   assert.equal(reportCall.data.data, "https://cdn.example/report.json");
   assert.match(reportCall.data.event_id, /^[0-9a-f-]{36}$/);
   assert.equal(reportCall.headers["Device-Number"], "device-1");
-  assert.equal(reportCall.headers.DeviceNumber, "device-1");
 });
 
 test("instance and report failures surface the server message", async () => {

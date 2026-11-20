@@ -26,7 +26,7 @@ function copyPublic() {
 
 const shared = {
   bundle: true,
-  sourcemap: true,
+  sourcemap: false,
   target: ["chrome110"],
   logLevel: "info",
 };

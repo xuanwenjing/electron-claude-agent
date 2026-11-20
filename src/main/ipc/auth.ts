@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import { authSession } from "../auth";
 import { syncPushChannel } from "../push";
 import { syncClientTasks } from "../tasks";
+import { checkExtensionUpdate } from "../update";
 import { sendToRenderer } from "../window";
 import { cancelAllClientCrawls, hasActiveClientCrawls } from "./crawl";
 import { toErrorMessage } from "./errors";
@@ -11,10 +12,14 @@ export function registerAuthIpc(): void {
     hasActive: hasActiveClientCrawls,
     cancel: cancelAllClientCrawls,
   });
+  let loggedIn = false;
   authSession.onChange = (state) => {
     sendToRenderer("auth:event:session", state);
     syncPushChannel();
     syncClientTasks();
+    // 插件版本接口要登录，启动时通常还没恢复会话
+    if (state.user && !loggedIn) checkExtensionUpdate();
+    loggedIn = !!state.user;
   };
   const protect = async (action: () => unknown) => {
     try {

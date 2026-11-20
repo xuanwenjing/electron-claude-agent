@@ -1,7 +1,10 @@
 import { AbortError, query } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 
+import { authSession } from "../auth";
+import { deviceHeaders } from "../tasks/report";
 import { getPythonExecutable } from "../utils/paths";
+import { defaultSettings } from "../utils/request";
 import { createPythonSession, withBundledPython } from "./pythonMcp";
 import { resolveClaudeCli } from "./resolveClaudeCli";
 
@@ -13,6 +16,10 @@ export interface AgentProgressEvent {
 export interface RunAgentOptions {
   prompt: string;
   model?: string;
+  /** 单次模型回复的输出上限，不传用 CLI 默认值 */
+  maxTokens?: number;
+  /** 模型与工具往返的最大轮数，不传不限 */
+  maxTurns?: number;
   /** 追加在 Claude Code 默认系统提示词之后 */
   systemPrompt?: string;
   /** Skill 插件目录 */
@@ -35,6 +42,36 @@ function isInsideDir(root: string, targetPath: string): boolean {
   const abs = path.resolve(root, targetPath);
   const rel = path.relative(root, abs);
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+/**
+ * 大模型走后端网关：鉴权用登录 token，地址是 CLIENT_API_BASE_URL + /chat，
+ * 公共请求头（Source、门店、设备号）通过 ANTHROPIC_CUSTOM_HEADERS 带上，每行一个 "Name: Value"。
+ */
+export function agentGatewayEnv(): {
+  ANTHROPIC_AUTH_TOKEN: string;
+  ANTHROPIC_BASE_URL: string;
+  ANTHROPIC_CUSTOM_HEADERS: string;
+} {
+  const { token, outletCode } = authSession.getRequestContext();
+  if (!token || !outletCode) throw new Error("请先登录并进入门店，再运行 run_agent");
+  const baseUrl = process.env.CLIENT_API_BASE_URL?.trim().replace(/\/+$/, "");
+  if (!baseUrl) throw new Error("客户端未配置 CLIENT_API_BASE_URL");
+  const headers = { ...defaultSettings, "Outlet-Code": outletCode, ...deviceHeaders() };
+  return {
+    ANTHROPIC_AUTH_TOKEN: token,
+    ANTHROPIC_BASE_URL: `${baseUrl}/chat`,
+    ANTHROPIC_CUSTOM_HEADERS: Object.entries(headers)
+      .map(([name, value]) => `${name}: ${value}`)
+      .join("\n"),
+  };
+}
+
+/** 用户电脑上的 ANTHROPIC_* / CLAUDE_* 会改变 CLI 的鉴权、地址或配置目录，不传给 CLI */
+function withoutClaudeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !/^(ANTHROPIC|CLAUDE)_/i.test(key)),
+  );
 }
 
 function summarizePayload(value: unknown, max = 1200): string {
@@ -60,7 +97,8 @@ export async function runAgent(options: RunAgentOptions): Promise<string> {
   const workspace = options.workDir;
   const pluginDirs = options.pluginDirs ?? [];
   const cliPath = resolveClaudeCli();
-  const model = options.model || process.env.ANTHROPIC_MODEL || undefined;
+  const gateway = agentGatewayEnv();
+  const model = options.model || undefined;
   const python = createPythonSession(workspace);
   const onAbort = () => python.killAll();
   abortController?.signal.addEventListener("abort", onAbort, { once: true });
@@ -69,7 +107,10 @@ export async function runAgent(options: RunAgentOptions): Promise<string> {
   onEvent({ kind: "log", text: `工作区: ${workspace}` });
   onEvent({ kind: "log", text: `Skills 插件: ${pluginDirs.length ? pluginDirs.join(", ") : "无"}` });
   onEvent({ kind: "log", text: `MCP: python (run_python) → ${getPythonExecutable() ?? "未找到内置 Python"}` });
+  onEvent({ kind: "log", text: `网关: ${gateway.ANTHROPIC_BASE_URL}` });
   if (model) onEvent({ kind: "log", text: `模型: ${model}` });
+  if (options.maxTokens) onEvent({ kind: "log", text: `输出上限: ${options.maxTokens} tokens` });
+  if (options.maxTurns) onEvent({ kind: "log", text: `最大轮数: ${options.maxTurns}` });
 
   let finalText = "";
 
@@ -79,6 +120,7 @@ export async function runAgent(options: RunAgentOptions): Promise<string> {
       options: {
         cwd: workspace,
         model,
+        ...(options.maxTurns ? { maxTurns: options.maxTurns } : {}),
         abortController,
         pathToClaudeCodeExecutable: cliPath,
         ...(options.systemPrompt
@@ -105,7 +147,9 @@ export async function runAgent(options: RunAgentOptions): Promise<string> {
         ],
         permissionMode: "default",
         env: {
-          ...withBundledPython(process.env),
+          ...withBundledPython(withoutClaudeEnv(process.env)),
+          ...gateway,
+          ...(options.maxTokens ? { CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(options.maxTokens) } : {}),
           // 标识来源，方便网关侧排查
           CLAUDE_AGENT_SDK_CLIENT_APP: "electron-claude-agent",
         },
@@ -265,7 +309,10 @@ export async function runAgent(options: RunAgentOptions): Promise<string> {
       ) {
         throw new AgentStoppedError();
       } else {
-        const errText = `模型调用失败: ${message.subtype}`;
+        const errText =
+          message.subtype === "error_max_turns"
+            ? `模型超过最大轮数 ${options.maxTurns} 仍未完成`
+            : `模型调用失败: ${message.subtype}`;
         onEvent({ kind: "error", text: errText });
         throw new Error(errText);
       }

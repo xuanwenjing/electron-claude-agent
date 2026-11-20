@@ -142,7 +142,7 @@ test("task_config is sent to the extension with run_agent bot details filled in"
               type: "run_agent",
               name: "reply",
               save_as: "reply",
-              run_agent_params: { bot_code: "commentator", output_format: "json", timeout: 180000 },
+              run_agent_params: { bot_code: "commentator", output_format: "json", timeout: 180000, max_turns: 20 },
             },
             {
               type: "run_agent",
@@ -163,6 +163,7 @@ test("task_config is sent to the extension with run_agent bot details filled in"
       botCode: "commentator",
       systemPrompt: "回复 ${comment}",
       model: "claude",
+      maxTokens: 1024,
       skills: [{ url: "https://example.test/skill.zip", version: "1", sha256: "abc" }],
     },
   };
@@ -181,6 +182,9 @@ test("task_config is sent to the extension with run_agent bot details filled in"
   assert.equal(step.skills[0].sha256, "abc");
   assert.equal(step.output_format, "json");
   assert.equal(step.timeout, 180000);
+  assert.equal(step.max_tokens, 1024);
+  assert.equal(step.max_turns, 20);
+  assert.equal(config.workflow[1].children[1].run_agent_params.max_turns, undefined);
   assert.equal(step.bot_code, undefined);
   assert.equal(config.workflow[1].children[0].save_as, "reply");
   assert.equal(config.variables.shop, "示例店");

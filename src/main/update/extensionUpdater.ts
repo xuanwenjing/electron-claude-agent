@@ -3,7 +3,9 @@ import AdmZip from "adm-zip";
 import fs from "node:fs";
 import path from "node:path";
 
+import { authSession } from "../auth";
 import { isExtensionConnected, reloadExtension } from "../crawl/bridgeServer";
+import { request } from "../utils/request";
 
 type RemoteExtensionInfo = { version: string; url: string };
 
@@ -142,14 +144,18 @@ function findManifestRoot(dir: string): string | null {
   return null;
 }
 
-async function fetchRemoteInfo(updateUrl: string): Promise<RemoteExtensionInfo> {
-  const res = await net.fetch(updateUrl, { cache: "no-store" });
-  if (!res.ok) throw new Error(`拉取 ext-latest.json 失败: HTTP ${res.status}`);
-  const body = (await res.json()) as Partial<RemoteExtensionInfo>;
-  if (typeof body.version !== "string" || typeof body.url !== "string") {
-    throw new Error("ext-latest.json 格式错误，需要 { version, url }");
+/** GET /admin/chrome-extension；首次发布前 data 为 null，返回 null 表示无需更新 */
+async function fetchRemoteInfo(): Promise<RemoteExtensionInfo | null> {
+  const body = await request.request({ url: "/admin/chrome-extension", method: "GET" });
+  if (!body || body.code !== 200) {
+    throw new Error(body?.msg || body?.message || "查询最新插件版本失败");
   }
-  return { version: body.version, url: new URL(body.url, updateUrl).toString() };
+  if (body.data == null) return null;
+  const { version, download_url } = body.data as { version?: unknown; download_url?: unknown };
+  if (typeof version !== "string" || !version || typeof download_url !== "string" || !/^https?:\/\//i.test(download_url)) {
+    throw new Error("最新插件版本格式错误，需要 { version, download_url }");
+  }
+  return { version, url: download_url };
 }
 
 async function downloadAndExtract(zipUrl: string): Promise<void> {
@@ -189,14 +195,16 @@ export function flushPendingExtensionReload(): void {
 }
 
 async function runRemoteUpdate(): Promise<ExtensionUpdateResult> {
-  const updateUrl = process.env.EXT_UPDATE_URL?.trim();
   const installedVersion = readManifestVersion(getInstalledExtensionDir());
-  if (!updateUrl) {
-    return { ok: true, updated: false, version: installedVersion, message: "未配置 EXT_UPDATE_URL，跳过扩展更新" };
+  if (!authSession.getRequestContext().token) {
+    return { ok: true, updated: false, version: installedVersion, message: "未登录，登录后再检查扩展更新" };
   }
 
   try {
-    const remote = await fetchRemoteInfo(updateUrl);
+    const remote = await fetchRemoteInfo();
+    if (!remote) {
+      return { ok: true, updated: false, version: installedVersion, message: "后台尚未发布插件" };
+    }
     if (remote.version === installedVersion) {
       return { ok: true, updated: false, version: installedVersion, message: `扩展已是最新版本 ${remote.version}` };
     }
@@ -214,7 +222,7 @@ async function runRemoteUpdate(): Promise<ExtensionUpdateResult> {
   }
 }
 
-/** 拉取 EXT_UPDATE_URL 指向的 ext-latest.json，版本不一致则下载替换并通知扩展重载 */
+/** 查询后台发布的最新插件，版本不一致则下载替换并通知扩展重载 */
 export function checkRemoteExtensionUpdate(): Promise<ExtensionUpdateResult> {
   if (!updating) {
     updating = runRemoteUpdate().finally(() => {

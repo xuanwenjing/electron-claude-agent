@@ -9,7 +9,7 @@ const schema = z.object({
   apiBaseURL: z.string(),
   token: z.string().min(1),
   expiresAt: z.number().finite().positive(),
-  outletCode: z.string().min(1),
+  outletCode: z.string(),
 });
 const apiBaseURL = () =>
   process.env.CLIENT_API_BASE_URL!.replace(

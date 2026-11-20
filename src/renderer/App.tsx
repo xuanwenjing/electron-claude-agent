@@ -24,7 +24,7 @@ export function App() {
 
   useEffect(() => {
     if (user) useCrawlStore.getState().init();
-    useCrawlStore.setState({ logs: [] });
+    useCrawlStore.getState().clearLogs();
   }, [user, outlet?.outlet_code]);
 
   if (!ready)

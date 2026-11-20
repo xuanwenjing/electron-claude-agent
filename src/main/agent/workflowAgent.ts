@@ -3,12 +3,13 @@ import path from "node:path";
 
 import type { RunAgentParams } from "../../shared/bridgeProtocol";
 import { ensureWorkspaceDir } from "../utils/paths";
-import { runAgent } from "./runAgent";
+import { agentGatewayEnv, runAgent } from "./runAgent";
 import { installSkills } from "./skillPackage";
 
 export { loadBotRuntime } from "./botPackage";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_MAX_TURNS = 50;
 const LOG_MAX = 300;
 const RUNS_DIR = "agent-runs";
 /** 不属于任何任务的 run_agent 放这里，跑完即删 */
@@ -54,6 +55,10 @@ const tasks = new Map<string, Map<string, Promise<string>>>();
 /** requestId → 进行中的 run_agent，用于取消 */
 const running = new Map<string, AbortController>();
 let staleRunsRemoved = false;
+
+function positiveInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1 ? Math.floor(value) : undefined;
+}
 
 function clip(text: string): string {
   return text.length > LOG_MAX ? `${text.slice(0, LOG_MAX)}…` : text;
@@ -108,6 +113,8 @@ async function execute(
     return await runAgent({
       prompt: params.prompt,
       model: params.model,
+      maxTokens: positiveInt(params.maxTokens),
+      maxTurns: positiveInt(params.maxTurns) ?? DEFAULT_MAX_TURNS,
       systemPrompt: params.systemPrompt,
       pluginDirs,
       workDir,
@@ -140,9 +147,7 @@ export async function runWorkflowAgent(
   params: RunAgentParams,
   log: (msg: string) => void,
 ): Promise<string> {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    throw new Error("客户端未配置 ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN");
-  }
+  agentGatewayEnv();
   removeStaleRuns();
   const taskRuns = taskId ? taskRunsOf(taskId) : undefined;
   const parentDir = taskId ? taskDirOf(taskId) : path.join(runsRoot(), NO_TASK_DIR);

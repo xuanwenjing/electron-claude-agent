@@ -66,6 +66,10 @@ export interface RunAgentStepParam {
   output_format?: "text" | "json";
   /** 毫秒，默认 600000 */
   timeout?: number;
+  /** 单次模型回复的输出上限；客户端从 Bot 详情填入 */
+  max_tokens?: number;
+  /** 模型与工具往返的最大轮数，默认 50 */
+  max_turns?: number;
 }
 
 export interface WorkflowItem {

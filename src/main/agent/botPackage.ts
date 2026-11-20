@@ -53,10 +53,12 @@ export function parseBotRuntime(data: unknown): BotRuntime {
     };
   });
   const model = bot.model?.name?.trim();
+  const maxTokens = bot.model?.max_tokens;
   return {
     botCode: bot.bot_code,
     systemPrompt,
     ...(model ? { model } : {}),
+    ...(maxTokens && maxTokens > 0 ? { maxTokens: Math.floor(maxTokens) } : {}),
     skills,
   };
 }

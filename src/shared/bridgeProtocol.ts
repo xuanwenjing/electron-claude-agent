@@ -82,6 +82,7 @@ export type BotRuntime = {
   botCode: string;
   systemPrompt: string;
   model?: string;
+  maxTokens?: number;
   skills: RunAgentSkill[];
 };
 
@@ -91,6 +92,10 @@ export type RunAgentParams = {
   model?: string;
   skills?: RunAgentSkill[];
   timeoutMs?: number;
+  /** 单次模型回复的输出上限 */
+  maxTokens?: number;
+  /** 模型与工具往返的最大轮数 */
+  maxTurns?: number;
 };
 
 export type RunAgentRequestMessage = {

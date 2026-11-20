@@ -60,7 +60,6 @@ export class Request {
   }
 
   private setupInterceptors() {
-    // 请求拦截器
     this.service.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         config.headers["Client-Version"] = app.getVersion();
@@ -69,7 +68,7 @@ export class Request {
       (error) => Promise.reject(error),
     );
 
-    // 响应拦截器
+    // 后端成功码和登录失效码有多种写法，统一成 200 / 401。
     this.service.interceptors.response.use(
       async (response: AxiosResponse) => {
         const { data } = response;
@@ -85,12 +84,7 @@ export class Request {
           case "AUTH-TOKEN-INVALID":
           case "401":
             data.code = 401;
-            // await common_chromeLocalStorage.remove('userInfo');
-            // await this.options.handleLoginOut?.();
             break;
-          // case 'internal_server_error':
-          //   await this.options.handleHotelUnvalid?.();
-          //   break;
         }
         return response;
       },
